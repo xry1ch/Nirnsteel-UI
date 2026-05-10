@@ -40,6 +40,10 @@ local ACCOUNT_DEFAULTS =
         {
             enabled = true,
         },
+        compass =
+        {
+            enabled = true,
+        },
     },
 }
 
@@ -156,6 +160,10 @@ function Settings:GetActionBarFrames()
     return self.account.modules.actionBarFrames
 end
 
+function Settings:GetCompass()
+    return self.account.modules.compass
+end
+
 function Settings:IsLootHistoryEnabled()
     return self:GetLootHistory().enabled
 end
@@ -262,6 +270,17 @@ function Settings:SetActionBarFramesEnabled(value)
     self:GetActionBarFrames().enabled = value
     if Nirnsteel_UI.ActionBarFrames then
         Nirnsteel_UI.ActionBarFrames:RefreshSettings()
+    end
+end
+
+function Settings:IsCompassEnabled()
+    return self:GetCompass().enabled
+end
+
+function Settings:SetCompassEnabled(value)
+    self:GetCompass().enabled = value
+    if Nirnsteel_UI.Compass then
+        Nirnsteel_UI.Compass:RefreshSettings()
     end
 end
 
@@ -577,6 +596,22 @@ function Settings:RegisterAddonMenu()
                     getFunc = function() return self:IsActionBarFramesEnabled() end,
                     setFunc = function(value) self:SetActionBarFramesEnabled(value) end,
                     default = ACCOUNT_DEFAULTS.modules.actionBarFrames.enabled,
+                },
+            },
+        },
+        {
+            type = "submenu",
+            name = "Compass",
+            tooltip = "Settings for the Nirnsteel compass frame style.",
+            controls =
+            {
+                {
+                    type = "checkbox",
+                    name = "Enable Compass Module",
+                    tooltip = "Restyles the stock compass frame with a darker Nirnsteel frame using ESO art.",
+                    getFunc = function() return self:IsCompassEnabled() end,
+                    setFunc = function(value) self:SetCompassEnabled(value) end,
+                    default = ACCOUNT_DEFAULTS.modules.compass.enabled,
                 },
             },
         },

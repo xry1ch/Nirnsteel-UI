@@ -8,6 +8,7 @@
 
 ui/loot_history.xml
 modules/settings.lua
+modules/compass.lua
 modules/loot_history.lua
 modules/damage_numbers.lua
 modules/action_bar_frames.lua
