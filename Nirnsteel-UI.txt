@@ -9,3 +9,4 @@
 ui/loot_history.xml
 modules/settings.lua
 modules/loot_history.lua
+modules/damage_numbers.lua

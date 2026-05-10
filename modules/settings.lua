@@ -18,6 +18,24 @@ local ACCOUNT_DEFAULTS =
             soundsEnabled = true,
             filterExperience = false,
         },
+        damageNumbers =
+        {
+            enabled = true,
+            unlocked = false,
+            hideDefaultDamage = true,
+            critSoundEnabled = true,
+            fontKey = "antique",
+            critSoundKey = "CONSOLE_GAME_ENTER",
+            normalFontSize = 56,
+            critFontSize = 78,
+            durationMS = 820,
+            spread = 118,
+            drift = 55,
+            bigHitThreshold = 25000,
+            maxActive = 36,
+            soundThrottleMS = 120,
+            savedSctSettings = {},
+        },
     },
 }
 
@@ -33,6 +51,11 @@ local SERVER_DEFAULTS =
                 {
                     x = 180,
                     y = -230,
+                },
+                damageNumbers =
+                {
+                    x = 0,
+                    y = -45,
                 },
             },
         },
@@ -66,8 +89,40 @@ local function CopyDefaults(target, defaults)
     end
 end
 
+local function UpgradeDamageNumberDefaults(account)
+    local damageNumbers = account
+        and account.modules
+        and account.modules.damageNumbers
+
+    if not damageNumbers then
+        return
+    end
+
+    if damageNumbers.normalFontSize == 42 then
+        damageNumbers.normalFontSize = ACCOUNT_DEFAULTS.modules.damageNumbers.normalFontSize
+    end
+
+    if damageNumbers.critFontSize == 58 then
+        damageNumbers.critFontSize = ACCOUNT_DEFAULTS.modules.damageNumbers.critFontSize
+    end
+
+    if damageNumbers.durationMS == 950 then
+        damageNumbers.durationMS = ACCOUNT_DEFAULTS.modules.damageNumbers.durationMS
+    end
+
+    if damageNumbers.spread == 150 then
+        damageNumbers.spread = ACCOUNT_DEFAULTS.modules.damageNumbers.spread
+    end
+
+    if damageNumbers.drift == 120 then
+        damageNumbers.drift = ACCOUNT_DEFAULTS.modules.damageNumbers.drift
+    end
+end
+
 function Settings:Initialize()
     self.account = ZO_SavedVars:NewAccountWide("NirnsteelUI_Account", SAVED_VARS_VERSION, nil, ACCOUNT_DEFAULTS)
+    CopyDefaults(self.account, ACCOUNT_DEFAULTS)
+    UpgradeDamageNumberDefaults(self.account)
     self.servers = ZO_SavedVars:NewAccountWide("NirnsteelUI_Servers", SAVED_VARS_VERSION, nil, SERVER_DEFAULTS)
     self.serverKey = GetServerKey()
     self.servers.servers[self.serverKey] = self.servers.servers[self.serverKey] or {}
@@ -83,6 +138,14 @@ end
 
 function Settings:GetLootHistoryPosition()
     return self.server.modules.lootHistory
+end
+
+function Settings:GetDamageNumbers()
+    return self.account.modules.damageNumbers
+end
+
+function Settings:GetDamageNumbersPosition()
+    return self.server.modules.damageNumbers
 end
 
 function Settings:IsLootHistoryEnabled()
@@ -125,6 +188,60 @@ end
 
 function Settings:SetLootHistoryPosition(x, y)
     local position = self:GetLootHistoryPosition()
+    position.x = x
+    position.y = y
+end
+
+function Settings:IsDamageNumbersEnabled()
+    return self:GetDamageNumbers().enabled
+end
+
+function Settings:IsDamageNumbersUnlocked()
+    return self:GetDamageNumbers().unlocked
+end
+
+function Settings:ShouldHideDefaultDamageNumbers()
+    return self:GetDamageNumbers().hideDefaultDamage
+end
+
+function Settings:AreDamageNumberCritSoundsEnabled()
+    return self:GetDamageNumbers().critSoundEnabled
+end
+
+function Settings:SetDamageNumbersEnabled(value)
+    self:GetDamageNumbers().enabled = value
+    if Nirnsteel_UI.DamageNumbers then
+        Nirnsteel_UI.DamageNumbers:RefreshSettings()
+    end
+end
+
+function Settings:SetDamageNumbersUnlocked(value)
+    self:GetDamageNumbers().unlocked = value
+    if Nirnsteel_UI.DamageNumbers then
+        Nirnsteel_UI.DamageNumbers:RefreshSettings()
+    end
+end
+
+function Settings:SetDamageNumbersHideDefault(value)
+    self:GetDamageNumbers().hideDefaultDamage = value
+    if Nirnsteel_UI.DamageNumbers then
+        Nirnsteel_UI.DamageNumbers:RefreshSettings()
+    end
+end
+
+function Settings:SetDamageNumberCritSoundsEnabled(value)
+    self:GetDamageNumbers().critSoundEnabled = value
+end
+
+function Settings:SetDamageNumberValue(key, value)
+    self:GetDamageNumbers()[key] = value
+    if Nirnsteel_UI.DamageNumbers then
+        Nirnsteel_UI.DamageNumbers:RefreshSettings()
+    end
+end
+
+function Settings:SetDamageNumbersPosition(x, y)
+    local position = self:GetDamageNumbersPosition()
     position.x = x
     position.y = y
 end
@@ -199,6 +316,226 @@ function Settings:RegisterAddonMenu()
             setFunc = function(value) self:SetLootHistoryFilterExperience(value) end,
             disabled = function() return not self:IsLootHistoryEnabled() end,
             default = ACCOUNT_DEFAULTS.modules.lootHistory.filterExperience,
+        },
+        {
+            type = "header",
+            name = "Damage Numbers",
+        },
+        {
+            type = "checkbox",
+            name = "Enable Damage Numbers Module",
+            tooltip = "Shows custom Nirnsteel combat damage numbers near the center of combat.",
+            getFunc = function() return self:IsDamageNumbersEnabled() end,
+            setFunc = function(value) self:SetDamageNumbersEnabled(value) end,
+            default = ACCOUNT_DEFAULTS.modules.damageNumbers.enabled,
+        },
+        {
+            type = "checkbox",
+            name = "Unlock Damage Number Origin",
+            tooltip = "Shows a draggable anchor for the center point where damage numbers spawn. Position is saved per server.",
+            getFunc = function() return self:IsDamageNumbersUnlocked() end,
+            setFunc = function(value) self:SetDamageNumbersUnlocked(value) end,
+            disabled = function() return not self:IsDamageNumbersEnabled() end,
+            default = ACCOUNT_DEFAULTS.modules.damageNumbers.unlocked,
+        },
+        {
+            type = "checkbox",
+            name = "Hide Default Damage Numbers",
+            tooltip = "Disables ESO damage and DoT scrolling combat text categories while the Nirnsteel module is enabled.",
+            getFunc = function() return self:ShouldHideDefaultDamageNumbers() end,
+            setFunc = function(value) self:SetDamageNumbersHideDefault(value) end,
+            disabled = function() return not self:IsDamageNumbersEnabled() end,
+            default = ACCOUNT_DEFAULTS.modules.damageNumbers.hideDefaultDamage,
+        },
+        {
+            type = "checkbox",
+            name = "Critical Hit Sound",
+            tooltip = "Plays a throttled impact sound for critical damage events.",
+            getFunc = function() return self:AreDamageNumberCritSoundsEnabled() end,
+            setFunc = function(value) self:SetDamageNumberCritSoundsEnabled(value) end,
+            disabled = function() return not self:IsDamageNumbersEnabled() end,
+            default = ACCOUNT_DEFAULTS.modules.damageNumbers.critSoundEnabled,
+        },
+        {
+            type = "dropdown",
+            name = "Damage Number Font",
+            tooltip = "Chooses the font family used by custom damage numbers.",
+            choices =
+            {
+                "Antique",
+                "Handwritten",
+                "Stone Tablet",
+                "Prose Antique",
+                "Trajan",
+                "Univers 57",
+                "Univers 67",
+                "Univers Cyrillic",
+                "Univers Cyrillic Bold",
+                "Futura Light",
+                "Futura Medium",
+                "Futura Bold",
+                "ESO Japanese",
+                "ESO Japanese Medium",
+                "Chinese Medium",
+                "Gamepad Bold",
+                "Gamepad Medium",
+                "Gamepad Light",
+                "Gamepad Number",
+                "Keyboard Bold",
+                "Keyboard Medium",
+                "Chat",
+            },
+            choicesValues =
+            {
+                "antique",
+                "handwritten",
+                "stoneTablet",
+                "proseAntique",
+                "trajan",
+                "univers57",
+                "univers67",
+                "universCyrillic",
+                "universCyrillicBold",
+                "futuraLight",
+                "futuraMedium",
+                "futuraBold",
+                "esoJapanese",
+                "esoJapaneseMedium",
+                "chineseMedium",
+                "gamepadBold",
+                "gamepadMedium",
+                "gamepadLight",
+                "gamepadNumber",
+                "keyboardBold",
+                "keyboardMedium",
+                "chat",
+            },
+            getFunc = function() return self:GetDamageNumbers().fontKey end,
+            setFunc = function(value) self:SetDamageNumberValue("fontKey", value) end,
+            disabled = function() return not self:IsDamageNumbersEnabled() end,
+            default = ACCOUNT_DEFAULTS.modules.damageNumbers.fontKey,
+        },
+        {
+            type = "dropdown",
+            name = "Critical Sound",
+            tooltip = "Chooses the sound played for critical damage numbers.",
+            choices =
+            {
+                "CONSOLE_GAME_ENTER",
+                "RETURNING_PLAYER_OPEN_KEYBOARD",
+                "VENGEANCE_PERK_EQUIPPED",
+                "KEYBIND_BUTTON_DISABLED",
+                "PROMOTIONAL_EVENT_REWARD_TO_CLAIM_PROMPT"
+            },
+            choicesValues =
+            {
+                "CONSOLE_GAME_ENTER",
+                "RETURNING_PLAYER_OPEN_KEYBOARD",
+                "VENGEANCE_PERK_EQUIPPED",
+                "KEYBIND_BUTTON_DISABLED",
+                "PROMOTIONAL_EVENT_REWARD_TO_CLAIM_PROMPT"
+
+            },
+            getFunc = function() return self:GetDamageNumbers().critSoundKey end,
+            setFunc = function(value) self:SetDamageNumberValue("critSoundKey", value) end,
+            disabled = function() return not self:IsDamageNumbersEnabled() or not self:AreDamageNumberCritSoundsEnabled() end,
+            default = ACCOUNT_DEFAULTS.modules.damageNumbers.critSoundKey,
+        },
+        {
+            type = "slider",
+            name = "Normal Font Size",
+            tooltip = "Controls the font size for regular damage numbers.",
+            min = 32,
+            max = 96,
+            step = 1,
+            getFunc = function() return self:GetDamageNumbers().normalFontSize end,
+            setFunc = function(value) self:SetDamageNumberValue("normalFontSize", value) end,
+            disabled = function() return not self:IsDamageNumbersEnabled() end,
+            default = ACCOUNT_DEFAULTS.modules.damageNumbers.normalFontSize,
+        },
+        {
+            type = "slider",
+            name = "Critical Font Size",
+            tooltip = "Controls the font size for critical damage numbers.",
+            min = 48,
+            max = 128,
+            step = 1,
+            getFunc = function() return self:GetDamageNumbers().critFontSize end,
+            setFunc = function(value) self:SetDamageNumberValue("critFontSize", value) end,
+            disabled = function() return not self:IsDamageNumbersEnabled() end,
+            default = ACCOUNT_DEFAULTS.modules.damageNumbers.critFontSize,
+        },
+        {
+            type = "slider",
+            name = "Duration",
+            tooltip = "Controls how long damage numbers remain visible.",
+            min = 450,
+            max = 1800,
+            step = 25,
+            getFunc = function() return self:GetDamageNumbers().durationMS end,
+            setFunc = function(value) self:SetDamageNumberValue("durationMS", value) end,
+            disabled = function() return not self:IsDamageNumbersEnabled() end,
+            default = ACCOUNT_DEFAULTS.modules.damageNumbers.durationMS,
+        },
+        {
+            type = "slider",
+            name = "Spread",
+            tooltip = "Controls how far new damage numbers scatter around the combat center.",
+            min = 40,
+            max = 280,
+            step = 5,
+            getFunc = function() return self:GetDamageNumbers().spread end,
+            setFunc = function(value) self:SetDamageNumberValue("spread", value) end,
+            disabled = function() return not self:IsDamageNumbersEnabled() end,
+            default = ACCOUNT_DEFAULTS.modules.damageNumbers.spread,
+        },
+        {
+            type = "slider",
+            name = "Drift",
+            tooltip = "Controls how far damage numbers travel after the pop.",
+            min = 0,
+            max = 160,
+            step = 5,
+            getFunc = function() return self:GetDamageNumbers().drift end,
+            setFunc = function(value) self:SetDamageNumberValue("drift", value) end,
+            disabled = function() return not self:IsDamageNumbersEnabled() end,
+            default = ACCOUNT_DEFAULTS.modules.damageNumbers.drift,
+        },
+        {
+            type = "slider",
+            name = "Big Hit Threshold",
+            tooltip = "Hits at or above this value drift less so they feel heavier.",
+            min = 1000,
+            max = 200000,
+            step = 1000,
+            getFunc = function() return self:GetDamageNumbers().bigHitThreshold end,
+            setFunc = function(value) self:SetDamageNumberValue("bigHitThreshold", value) end,
+            disabled = function() return not self:IsDamageNumbersEnabled() end,
+            default = ACCOUNT_DEFAULTS.modules.damageNumbers.bigHitThreshold,
+        },
+        {
+            type = "slider",
+            name = "Maximum Active Numbers",
+            tooltip = "Caps the number of visible damage labels. The oldest label is reused when the cap is reached.",
+            min = 8,
+            max = 80,
+            step = 1,
+            getFunc = function() return self:GetDamageNumbers().maxActive end,
+            setFunc = function(value) self:SetDamageNumberValue("maxActive", value) end,
+            disabled = function() return not self:IsDamageNumbersEnabled() end,
+            default = ACCOUNT_DEFAULTS.modules.damageNumbers.maxActive,
+        },
+        {
+            type = "slider",
+            name = "Critical Sound Throttle",
+            tooltip = "Minimum milliseconds between critical-hit sounds.",
+            min = 0,
+            max = 800,
+            step = 10,
+            getFunc = function() return self:GetDamageNumbers().soundThrottleMS end,
+            setFunc = function(value) self:SetDamageNumberValue("soundThrottleMS", value) end,
+            disabled = function() return not self:IsDamageNumbersEnabled() or not self:AreDamageNumberCritSoundsEnabled() end,
+            default = ACCOUNT_DEFAULTS.modules.damageNumbers.soundThrottleMS,
         },
     }
 
