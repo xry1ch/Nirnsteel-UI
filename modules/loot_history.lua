@@ -13,6 +13,7 @@ local LOOT_HISTORY_ANCHOR_OFFSET_X = 180
 local LOOT_HISTORY_ANCHOR_OFFSET_Y = -230
 local LOOT_SOUND_THROTTLE_MS = 90
 local SEQUENTIAL_REVEAL_DELAY_MS = 260
+local LOOT_ENTRY_SPACING_Y = -1
 local DEBUG_MIX_ITEM_COUNT = 7
 
 local QUALITY_STYLE =
@@ -21,9 +22,9 @@ local QUALITY_STYLE =
     [ITEM_DISPLAY_QUALITY_NORMAL] = { 0.22, 0.20 },
     [ITEM_DISPLAY_QUALITY_MAGIC] = { 0.30, 0.28 },
     [ITEM_DISPLAY_QUALITY_ARCANE] = { 0.42, 0.42 },
-    [ITEM_DISPLAY_QUALITY_ARTIFACT] = { 0.64, 0.62 },
-    [ITEM_DISPLAY_QUALITY_LEGENDARY] = { 0.88, 0.82 },
-    [ITEM_DISPLAY_QUALITY_MYTHIC_OVERRIDE] = { 0.92, 0.86 },
+    [ITEM_DISPLAY_QUALITY_ARTIFACT] = { 0.78, 0.72 },
+    [ITEM_DISPLAY_QUALITY_LEGENDARY] = { 1.00, 0.95 },
+    [ITEM_DISPLAY_QUALITY_MYTHIC_OVERRIDE] = { 1.00, 0.95 },
 }
 
 local lastLootSoundMS = -LOOT_SOUND_THROTTLE_MS
@@ -135,9 +136,23 @@ local function GetEntryQualityStyle(data)
     return nil, 0.26, 0.20
 end
 
-local function PlayRarityPulse(control)
-    if not control.rarityPulseTimeline then
-        control.rarityPulseTimeline = ANIMATION_MANAGER:CreateTimelineFromVirtual("Nirnsteel_LootHistory_RarityPulse", control)
+local function GetPulseTimelineName(data)
+    if data and data.entryType == LOOT_ENTRY_TYPE_ITEM then
+        if data.displayQuality == ITEM_DISPLAY_QUALITY_LEGENDARY or data.displayQuality == ITEM_DISPLAY_QUALITY_MYTHIC_OVERRIDE then
+            return "Nirnsteel_LootHistory_LegendaryPulse"
+        elseif data.displayQuality == ITEM_DISPLAY_QUALITY_ARTIFACT then
+            return "Nirnsteel_LootHistory_EpicPulse"
+        end
+    end
+
+    return "Nirnsteel_LootHistory_RarityPulse"
+end
+
+local function PlayRarityPulse(control, data)
+    local timelineName = GetPulseTimelineName(data)
+    if control.rarityPulseTimelineName ~= timelineName then
+        control.rarityPulseTimelineName = timelineName
+        control.rarityPulseTimeline = ANIMATION_MANAGER:CreateTimelineFromVirtual(timelineName, control)
     end
 
     control.rarityPulseTimeline:PlayFromStart()
@@ -149,7 +164,7 @@ local function QueueRarityPulse(control, data)
 
     zo_callLater(function()
         if control.nirnsteelPulseToken == pulseToken and not control:IsHidden() then
-            PlayRarityPulse(control)
+            PlayRarityPulse(control, data)
             PlayLootFeedbackSound(data)
         end
     end, 160)
@@ -160,9 +175,11 @@ local function ApplyVisualStyle(control, data)
 
     if data and data.color then
         SafeSetColor(control.rarityGlow, data.color, glowAlpha)
+        SafeSetColor(control.rarityBurst, data.color, glowAlpha)
         SafeSetColor(control.iconFrame, data.color, frameAlpha)
     elseif control.rarityGlow then
         control.rarityGlow:SetColor(1, 1, 1, glowAlpha)
+        control.rarityBurst:SetColor(1, 1, 1, glowAlpha)
         control.iconFrame:SetColor(1, 1, 1, frameAlpha)
     end
 
@@ -304,14 +321,14 @@ function LootHistory:PatchKeyboardHistory()
         lootHistory.lootStream.anchor = ZO_Anchor:New(BOTTOMRIGHT, GuiRoot, CENTER, LOOT_HISTORY_ANCHOR_OFFSET_X, LOOT_HISTORY_ANCHOR_OFFSET_Y)
         InstallSequentialReveal(lootHistory.lootStream)
         lootHistory.lootStream:SetContainerShowTime(3100)
-        lootHistory.lootStream:SetAdditionalEntrySpacingY(3)
+        lootHistory.lootStream:SetAdditionalEntrySpacingY(LOOT_ENTRY_SPACING_Y)
     end
 
     if lootHistory.lootStreamPersistent then
         lootHistory.lootStreamPersistent.anchor = ZO_Anchor:New(BOTTOMRIGHT, GuiRoot, CENTER, LOOT_HISTORY_ANCHOR_OFFSET_X, LOOT_HISTORY_ANCHOR_OFFSET_Y)
         InstallSequentialReveal(lootHistory.lootStreamPersistent)
         lootHistory.lootStreamPersistent:SetContainerShowTime(5600)
-        lootHistory.lootStreamPersistent:SetAdditionalEntrySpacingY(3)
+        lootHistory.lootStreamPersistent:SetAdditionalEntrySpacingY(LOOT_ENTRY_SPACING_Y)
     end
 
     lootHistory.nirnsteelPatched = true
@@ -331,6 +348,7 @@ end
 function Nirnsteel_UI_LootHistory_Entry_OnInitialized(control)
     ZO_LootHistory_Shared_OnInitialized(control)
     control.rarityGlow = control:GetNamedChild("RarityGlow")
+    control.rarityBurst = control:GetNamedChild("RarityBurst")
     control.glass = control:GetNamedChild("Glass")
     control.iconFrame = control:GetNamedChild("IconFrame")
 end
