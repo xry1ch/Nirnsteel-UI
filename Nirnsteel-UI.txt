@@ -1,8 +1,11 @@
 ## Title: Nirnsteel UI
 ## APIVersion: 101049
+## DependsOn: LibAddonMenu-2.0>=41
+## SavedVariables: NirnsteelUI_Account NirnsteelUI_Servers
 ## Author: Nirnsteel
 ## Version: 0.1.0
 ## Description: UI feedback and polish for ESO.
 
 ui/loot_history.xml
+modules/settings.lua
 modules/loot_history.lua

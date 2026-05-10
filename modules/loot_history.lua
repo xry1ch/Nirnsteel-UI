@@ -9,11 +9,16 @@ local STOCK_TEMPLATE_NAME = "ZO_LootHistory_KeyboardEntry"
 local PATCH_UPDATE_NAME = "Nirnsteel_UI_LootHistory_WaitForKeyboard"
 local MAX_PATCH_ATTEMPTS = 80
 local PATCH_RETRY_MS = 250
-local LOOT_HISTORY_ANCHOR_OFFSET_X = 180
-local LOOT_HISTORY_ANCHOR_OFFSET_Y = -230
+local DEFAULT_LOOT_HISTORY_ANCHOR_OFFSET_X = 180
+local DEFAULT_LOOT_HISTORY_ANCHOR_OFFSET_Y = -230
+local STOCK_LOOT_HISTORY_ANCHOR_OFFSET_X = 0
+local STOCK_LOOT_HISTORY_ANCHOR_OFFSET_Y = -84
+local STOCK_LOOT_HISTORY_CONTROL_OFFSET_Y = -95
 local LOOT_SOUND_THROTTLE_MS = 90
 local SEQUENTIAL_REVEAL_DELAY_MS = 260
 local LOOT_ENTRY_SPACING_Y = -1
+local STOCK_CONTAINER_SHOW_TIME_MS = 3600
+local STOCK_PERSISTENT_CONTAINER_SHOW_TIME_MS = 7000
 local DEBUG_MIX_ITEM_COUNT = 7
 
 local QUALITY_STYLE =
@@ -29,6 +34,7 @@ local QUALITY_STYLE =
 
 local lastLootSoundMS = -LOOT_SOUND_THROTTLE_MS
 local debugItemId = 900000
+local originalAddXpEntry
 
 local function IsLegendaryItemEntry(data)
     return data
@@ -37,6 +43,10 @@ local function IsLegendaryItemEntry(data)
 end
 
 local function PlayLootFeedbackSound(data)
+    if Nirnsteel_UI.Settings and not Nirnsteel_UI.Settings:AreLootHistorySoundsEnabled() then
+        return
+    end
+
     local nowMS = GetFrameTimeMilliseconds()
     if nowMS - lastLootSoundMS >= LOOT_SOUND_THROTTLE_MS then
         if IsLegendaryItemEntry(data) then
@@ -113,6 +123,18 @@ local function RegisterDebugCommands()
     SLASH_COMMANDS["/nslootmix"] = function()
         LootHistory:DebugMixedItems()
     end
+end
+
+local function GetLootHistoryPosition()
+    if Nirnsteel_UI.Settings then
+        return Nirnsteel_UI.Settings:GetLootHistoryPosition()
+    end
+
+    return { x = DEFAULT_LOOT_HISTORY_ANCHOR_OFFSET_X, y = DEFAULT_LOOT_HISTORY_ANCHOR_OFFSET_Y }
+end
+
+local function IsLootHistoryModuleEnabled()
+    return not Nirnsteel_UI.Settings or Nirnsteel_UI.Settings:IsLootHistoryEnabled()
 end
 
 local function SafeSetColor(control, colorDef, alpha)
@@ -232,14 +254,15 @@ local function CopyTemplateBehavior(stream)
     return true
 end
 
-local function MoveLootHistoryControl(lootHistory)
+local function ApplyLootHistoryAnchor(lootHistory)
     local control = lootHistory and lootHistory.control
     if not control then
         return
     end
 
+    local position = GetLootHistoryPosition()
     control:ClearAnchors()
-    control:SetAnchor(BOTTOMRIGHT, GuiRoot, CENTER, LOOT_HISTORY_ANCHOR_OFFSET_X, LOOT_HISTORY_ANCHOR_OFFSET_Y)
+    control:SetAnchor(BOTTOMRIGHT, GuiRoot, CENTER, position.x, position.y)
 end
 
 local function ScheduleNextReveal(stream)
@@ -262,6 +285,7 @@ local function InstallSequentialReveal(stream)
     end
 
     stream.nirnsteelSequentialReveal = true
+    stream.nirnsteelOriginalDisplayBatches = stream.DisplayBatches
 
     stream.DisplayBatches = function(self)
         local nowMS = GetFrameTimeMilliseconds()
@@ -302,6 +326,164 @@ local function InstallSequentialReveal(stream)
     end
 end
 
+local function RestoreSequentialReveal(stream)
+    if stream and stream.nirnsteelSequentialReveal and stream.nirnsteelOriginalDisplayBatches then
+        stream.DisplayBatches = stream.nirnsteelOriginalDisplayBatches
+        stream.nirnsteelOriginalDisplayBatches = nil
+        stream.nirnsteelSequentialReveal = nil
+        stream.nirnsteelRevealScheduled = nil
+        stream.nirnsteelNextRevealMS = nil
+    end
+end
+
+local function GetMover()
+    if LootHistory.mover then
+        return LootHistory.mover
+    end
+
+    local wm = WINDOW_MANAGER
+    local mover = wm:CreateTopLevelWindow("Nirnsteel_UI_LootHistoryMover")
+    mover:SetDimensions(360, 64)
+    mover:SetClampedToScreen(true)
+    mover:SetMouseEnabled(true)
+    mover:SetMovable(false)
+    mover:SetDrawTier(DT_HIGH)
+    mover:SetHidden(true)
+
+    local backdrop = wm:CreateControl(nil, mover, CT_BACKDROP)
+    backdrop:SetAnchorFill(mover)
+    backdrop:SetCenterColor(0.04, 0.04, 0.04, 0.55)
+    backdrop:SetEdgeColor(0.85, 0.72, 0.25, 0.9)
+    backdrop:SetEdgeTexture("", 1, 1, 2)
+
+    local label = wm:CreateControl(nil, mover, CT_LABEL)
+    label:SetAnchor(CENTER, mover, CENTER, 0, 0)
+    label:SetFont("ZoFontGameBold")
+    label:SetText("Nirnsteel Loot History")
+    label:SetColor(0.95, 0.82, 0.35, 1)
+
+    mover:SetHandler("OnMouseDown", function(control, button)
+        if button == MOUSE_BUTTON_INDEX_LEFT then
+            control:SetMovable(true)
+            control:StartMoving()
+        else
+            control:SetMovable(false)
+        end
+    end)
+
+    mover:SetHandler("OnMouseUp", function(control, button)
+        if button == MOUSE_BUTTON_INDEX_LEFT then
+            control:StopMovingOrResizing()
+        end
+        control:SetMovable(false)
+    end)
+
+    mover:SetHandler("OnMoveStop", function(control)
+        control:SetMovable(false)
+        local x = control:GetRight() - (GuiRoot:GetWidth() / 2)
+        local y = control:GetBottom() - (GuiRoot:GetHeight() / 2)
+        if Nirnsteel_UI.Settings then
+            Nirnsteel_UI.Settings:SetLootHistoryPosition(x, y)
+        end
+        LootHistory:ApplySettings()
+    end)
+
+    LootHistory.mover = mover
+    return mover
+end
+
+local function ApplyMoverState()
+    local mover = GetMover()
+    local unlocked = IsLootHistoryModuleEnabled() and Nirnsteel_UI.Settings and Nirnsteel_UI.Settings:IsLootHistoryUnlocked()
+    local position = GetLootHistoryPosition()
+
+    mover:ClearAnchors()
+    mover:SetAnchor(BOTTOMRIGHT, GuiRoot, CENTER, position.x, position.y)
+    mover:SetHidden(not unlocked)
+end
+
+local function RestoreStockHistory(lootHistory)
+    if not lootHistory then
+        return
+    end
+
+    lootHistory.entryTemplate = STOCK_TEMPLATE_NAME
+    if lootHistory.control then
+        lootHistory.control:ClearAnchors()
+        lootHistory.control:SetAnchor(BOTTOMRIGHT, GuiRoot, BOTTOMRIGHT, 0, STOCK_LOOT_HISTORY_CONTROL_OFFSET_Y)
+    end
+
+    if lootHistory.lootStream then
+        RestoreSequentialReveal(lootHistory.lootStream)
+        lootHistory.lootStream.anchor = ZO_Anchor:New(BOTTOMRIGHT, GuiRoot, BOTTOMRIGHT, STOCK_LOOT_HISTORY_ANCHOR_OFFSET_X, STOCK_LOOT_HISTORY_ANCHOR_OFFSET_Y)
+        lootHistory.lootStream:SetAdditionalEntrySpacingY(LOOT_ENTRY_SPACING_Y)
+        lootHistory.lootStream:SetContainerShowTime(STOCK_CONTAINER_SHOW_TIME_MS)
+    end
+
+    if lootHistory.lootStreamPersistent then
+        RestoreSequentialReveal(lootHistory.lootStreamPersistent)
+        lootHistory.lootStreamPersistent.anchor = ZO_Anchor:New(BOTTOMRIGHT, GuiRoot, BOTTOMRIGHT, STOCK_LOOT_HISTORY_ANCHOR_OFFSET_X, STOCK_LOOT_HISTORY_ANCHOR_OFFSET_Y)
+        lootHistory.lootStreamPersistent:SetAdditionalEntrySpacingY(LOOT_ENTRY_SPACING_Y)
+        lootHistory.lootStreamPersistent:SetContainerShowTime(STOCK_PERSISTENT_CONTAINER_SHOW_TIME_MS)
+    end
+
+    ApplyMoverState()
+end
+
+function LootHistory:ApplySettings()
+    local lootHistory = LOOT_HISTORY_KEYBOARD
+    if not lootHistory then
+        return
+    end
+
+    if not IsLootHistoryModuleEnabled() then
+        RestoreStockHistory(lootHistory)
+        return
+    end
+
+    lootHistory.entryTemplate = TEMPLATE_NAME
+    ApplyLootHistoryAnchor(lootHistory)
+
+    local position = GetLootHistoryPosition()
+    if lootHistory.lootStream then
+        InstallSequentialReveal(lootHistory.lootStream)
+        lootHistory.lootStream.anchor = ZO_Anchor:New(BOTTOMRIGHT, GuiRoot, CENTER, position.x, position.y)
+        lootHistory.lootStream:SetContainerShowTime(3100)
+        lootHistory.lootStream:SetAdditionalEntrySpacingY(LOOT_ENTRY_SPACING_Y)
+    end
+
+    if lootHistory.lootStreamPersistent then
+        InstallSequentialReveal(lootHistory.lootStreamPersistent)
+        lootHistory.lootStreamPersistent.anchor = ZO_Anchor:New(BOTTOMRIGHT, GuiRoot, CENTER, position.x, position.y)
+        lootHistory.lootStreamPersistent:SetContainerShowTime(5600)
+        lootHistory.lootStreamPersistent:SetAdditionalEntrySpacingY(LOOT_ENTRY_SPACING_Y)
+    end
+
+    ApplyMoverState()
+end
+
+function LootHistory:RefreshSettings()
+    self:PatchKeyboardHistory()
+    self:ApplySettings()
+end
+
+local function InstallExperienceFilter()
+    if originalAddXpEntry then
+        return
+    end
+
+    originalAddXpEntry = ZO_LootHistory_Shared.AddXpEntry
+    ZO_LootHistory_Shared.AddXpEntry = function(self, ...)
+        if Nirnsteel_UI.Settings
+            and Nirnsteel_UI.Settings:IsLootHistoryEnabled()
+            and Nirnsteel_UI.Settings:ShouldFilterLootHistoryExperience() then
+            return
+        end
+
+        return originalAddXpEntry(self, ...)
+    end
+end
+
 function LootHistory:PatchKeyboardHistory()
     local lootHistory = LOOT_HISTORY_KEYBOARD
     if not lootHistory or lootHistory.nirnsteelPatched then
@@ -315,23 +497,23 @@ function LootHistory:PatchKeyboardHistory()
     end
 
     lootHistory.entryTemplate = TEMPLATE_NAME
-    MoveLootHistoryControl(lootHistory)
+    InstallExperienceFilter()
+    ApplyLootHistoryAnchor(lootHistory)
 
     if lootHistory.lootStream then
-        lootHistory.lootStream.anchor = ZO_Anchor:New(BOTTOMRIGHT, GuiRoot, CENTER, LOOT_HISTORY_ANCHOR_OFFSET_X, LOOT_HISTORY_ANCHOR_OFFSET_Y)
         InstallSequentialReveal(lootHistory.lootStream)
         lootHistory.lootStream:SetContainerShowTime(3100)
         lootHistory.lootStream:SetAdditionalEntrySpacingY(LOOT_ENTRY_SPACING_Y)
     end
 
     if lootHistory.lootStreamPersistent then
-        lootHistory.lootStreamPersistent.anchor = ZO_Anchor:New(BOTTOMRIGHT, GuiRoot, CENTER, LOOT_HISTORY_ANCHOR_OFFSET_X, LOOT_HISTORY_ANCHOR_OFFSET_Y)
         InstallSequentialReveal(lootHistory.lootStreamPersistent)
         lootHistory.lootStreamPersistent:SetContainerShowTime(5600)
         lootHistory.lootStreamPersistent:SetAdditionalEntrySpacingY(LOOT_ENTRY_SPACING_Y)
     end
 
     lootHistory.nirnsteelPatched = true
+    self:ApplySettings()
     return true
 end
 
