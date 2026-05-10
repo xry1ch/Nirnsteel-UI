@@ -30,6 +30,10 @@ local DEFAULT_SETTINGS =
     healthTextureKey = "genericTall",
     magickaTextureKey = "genericTall",
     staminaTextureKey = "genericTall",
+    barPatternEnabled = false,
+    barPatternKey = "smoke",
+    barPatternOpacity = 18,
+    barPatternScale = 96,
     shieldTextureKey = "genericTall",
     borderWidth = 0,
     cornerSize = 0,
@@ -94,6 +98,14 @@ local FONT_FACES =
     trajan = "EsoUI/Common/Fonts/TrajanPro-Regular.slug",
     univers = "EsoUI/Common/Fonts/Univers57.slug",
     chat = "$(CHAT_FONT)",
+}
+
+local BAR_PATTERNS =
+{
+    smoke = "/art/fx/texture/smokecombinetexture.dds",
+    stillwater = "/art/maps/housing/stillwatersretreatext_base_0.dds",
+    Smoke = "/art/fx/texture/smokecombinetexture.dds",
+    Stillwater = "/art/maps/housing/stillwatersretreatext_base_0.dds",
 }
 
 local RESOURCE_DATA =
@@ -244,6 +256,10 @@ local function ShouldShowShieldOverlay()
     return GetSettingValue("shieldOverlayEnabled") ~= false
 end
 
+local function ShouldShowBarPattern()
+    return GetSettingValue("barPatternEnabled") == true
+end
+
 local function GetBarTextureInfo(settingKey, fallbackSettingKey)
     local textureKey = GetSettingValue(settingKey)
     if not BAR_TEXTURES[textureKey] and fallbackSettingKey then
@@ -301,9 +317,33 @@ local function SetResourceFillDirection(frame, key)
     if frame.bar and frame.bar.SetBarAlignment then
         frame.bar:SetBarAlignment(alignment)
     end
+    if frame.patternBar and frame.patternBar.SetBarAlignment then
+        frame.patternBar:SetBarAlignment(alignment)
+    end
     if frame.gloss and frame.gloss.SetBarAlignment then
         frame.gloss:SetBarAlignment(alignment)
     end
+end
+
+local function UpdatePatternTexture(frame)
+    if not frame or not frame.patternBar then
+        return
+    end
+
+    local pattern = BAR_PATTERNS[GetSettingValue("barPatternKey")] or BAR_PATTERNS.smoke
+    local opacity = ClampNumber(GetSettingValue("barPatternOpacity"), 0, 100) / 100
+    local scale = ClampNumber(GetSettingValue("barPatternScale"), 24, 256)
+    local width = frame.patternWidth or frame.layoutWidth or frame:GetWidth()
+    local height = frame.layoutHeight or frame:GetHeight()
+
+    if frame.patternBar.currentPattern ~= pattern then
+        frame.patternBar:SetTexture("")
+        frame.patternBar.currentPattern = pattern
+    end
+    frame.patternBar:SetTexture(pattern)
+    frame.patternBar:SetTextureCoords(0, math.max(width / scale, 0.01), 0, math.max(height / scale, 0.01))
+    frame.patternBar:SetColor(1, 1, 1, opacity)
+    frame.patternBar:SetHidden(not ShouldShowBarPattern() or opacity <= 0 or width <= 0)
 end
 
 local function ApplyFrameStyle(frame, width, height)
@@ -341,6 +381,7 @@ local function ApplyFrameStyle(frame, width, height)
 
     frame.bar:SetAlpha(alpha)
     SetStatusBarTextures(frame.bar, GetResourceTextureInfo(frame.powerKey))
+    UpdatePatternTexture(frame)
 
     if frame.shieldBar then
         SetStatusBarTextures(frame.shieldBar, GetBarTextureInfo("shieldTextureKey"))
@@ -475,6 +516,13 @@ function ResourceBars:CreateResourceBar(key, data)
     frame.bar:SetAnchorFill(frame.track)
     ConfigureStatusBar(frame.bar, data, key)
 
+    frame.patternBar = WINDOW_MANAGER:CreateControl(nil, frame.track, CT_STATUSBAR)
+    frame.patternBar:SetAnchorFill(frame.track)
+    frame.patternBar:EnableLeadingEdge(false)
+    frame.patternBar:SetDrawLayer(DL_OVERLAY)
+    frame.patternBar:SetDrawLevel(1)
+    frame.patternBar:SetHidden(true)
+
     if key == "health" then
         frame.shieldBar = WINDOW_MANAGER:CreateControl(nil, frame.track, CT_STATUSBAR)
         SetStatusBarTextures(frame.shieldBar, GetBarTextureInfo("shieldTextureKey"))
@@ -495,7 +543,7 @@ function ResourceBars:CreateResourceBar(key, data)
     frame.centerLabel:SetVerticalAlignment(TEXT_ALIGN_CENTER)
     frame.centerLabel:SetColor(0.96, 0.92, 0.82, 1)
     frame.centerLabel:SetDrawLayer(DL_OVERLAY)
-    frame.centerLabel:SetDrawLevel(2)
+    frame.centerLabel:SetDrawLevel(3)
 
     frame.leftLabel = WINDOW_MANAGER:CreateControl(nil, frame, CT_LABEL)
     frame.leftLabel:SetAnchor(LEFT, frame, LEFT, 6, 0)
@@ -504,7 +552,7 @@ function ResourceBars:CreateResourceBar(key, data)
     frame.leftLabel:SetVerticalAlignment(TEXT_ALIGN_CENTER)
     frame.leftLabel:SetColor(0.96, 0.92, 0.82, 1)
     frame.leftLabel:SetDrawLayer(DL_OVERLAY)
-    frame.leftLabel:SetDrawLevel(2)
+    frame.leftLabel:SetDrawLevel(3)
 
     frame.rightLabel = WINDOW_MANAGER:CreateControl(nil, frame, CT_LABEL)
     frame.rightLabel:SetAnchor(RIGHT, frame, RIGHT, -6, 0)
@@ -513,7 +561,7 @@ function ResourceBars:CreateResourceBar(key, data)
     frame.rightLabel:SetVerticalAlignment(TEXT_ALIGN_CENTER)
     frame.rightLabel:SetColor(0.96, 0.92, 0.82, 1)
     frame.rightLabel:SetDrawLayer(DL_OVERLAY)
-    frame.rightLabel:SetDrawLevel(2)
+    frame.rightLabel:SetDrawLevel(3)
 
     frame.data = data
     self.bars[key] = frame
@@ -782,6 +830,13 @@ function ResourceBars:ApplyLayoutGeometry()
     self:UpdateLabelLayout(stamina, p.staminaWidth, metrics.barHeight)
     stamina:ClearAnchors()
     stamina:SetAnchor(TOP, root, TOP, healthCenterX + ((p.magickaWidth + p.gap) * 0.5), metrics.barHeight + metrics.rowGap)
+
+    for _, key in ipairs(BAR_ORDER) do
+        local state = self.state and self.state[key]
+        if state then
+            self:UpdatePatternOverlay(self.bars[key], state.current or 0, state.maximum or 0)
+        end
+    end
 end
 
 function ResourceBars:ApplyLayout()
@@ -870,6 +925,36 @@ function ResourceBars:UpdateBarValue(frame, current, maximum, instant)
     else
         ZO_StatusBar_SmoothTransition(frame.bar, current, maximum)
     end
+
+    self:UpdatePatternOverlay(frame, current, maximum)
+end
+
+function ResourceBars:UpdatePatternOverlay(frame, current, maximum)
+    if not frame or not frame.patternBar then
+        return
+    end
+
+    if not ShouldShowBarPattern() then
+        frame.patternBar:SetHidden(true)
+        return
+    end
+
+    local maxValue = tonumber(maximum) or 0
+    local ratio = maxValue > 0 and zo_clamp((tonumber(current) or 0) / maxValue, 0, 1) or 0
+    if ratio <= 0 then
+        frame.patternBar:SetHidden(true)
+        return
+    end
+
+    local trackWidth = frame.layoutWidth or frame:GetWidth()
+    local trackHeight = frame.layoutHeight or frame:GetHeight()
+    frame.patternWidth = trackWidth
+    frame.patternBar:ClearAnchors()
+    frame.patternBar:SetAnchorFill(frame.track)
+    frame.patternBar:SetDimensions(trackWidth, trackHeight)
+    frame.patternBar:SetMinMax(0, maxValue)
+    frame.patternBar:SetValue(tonumber(current) or 0)
+    UpdatePatternTexture(frame)
 end
 
 function ResourceBars:UpdateHealthShieldOverlay(_healthCurrent, healthMax)

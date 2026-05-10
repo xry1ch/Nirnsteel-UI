@@ -69,6 +69,10 @@ local ACCOUNT_DEFAULTS =
             healthTextureKey = "genericTall",
             magickaTextureKey = "genericTall",
             staminaTextureKey = "genericTall",
+            barPatternEnabled = false,
+            barPatternKey = "smoke",
+            barPatternOpacity = 18,
+            barPatternScale = 96,
             shieldTextureKey = "genericTall",
             borderWidth = 0,
             cornerSize = 0,
@@ -234,6 +238,11 @@ local function UpgradeResourceBarDefaults(account)
         ["Soft Thin"] = "soft-shadow-thin",
         ["Soft Thick"] = "soft-shadow-thick",
     }
+    local patternAliases =
+    {
+        Smoke = "smoke",
+        Stillwater = "stillwater",
+    }
 
     for _, key in ipairs({ "healthTextFormat", "magickaTextFormat", "staminaTextFormat" }) do
         resourceBars[key] = textFormatAliases[resourceBars[key]] or resourceBars[key] or ACCOUNT_DEFAULTS.modules.resourceBars[key]
@@ -244,6 +253,7 @@ local function UpgradeResourceBarDefaults(account)
     resourceBars.shieldTextMode = shieldTextAliases[resourceBars.shieldTextMode] or resourceBars.shieldTextMode or ACCOUNT_DEFAULTS.modules.resourceBars.shieldTextMode
     resourceBars.textFontKey = fontAliases[resourceBars.textFontKey] or resourceBars.textFontKey or ACCOUNT_DEFAULTS.modules.resourceBars.textFontKey
     resourceBars.textOutline = outlineAliases[resourceBars.textOutline] or resourceBars.textOutline or ACCOUNT_DEFAULTS.modules.resourceBars.textOutline
+    resourceBars.barPatternKey = patternAliases[resourceBars.barPatternKey] or resourceBars.barPatternKey or ACCOUNT_DEFAULTS.modules.resourceBars.barPatternKey
 end
 
 function Settings:Initialize()
@@ -468,6 +478,11 @@ function Settings:SetResourceBarsValue(key, value)
         ["Soft Thin"] = "soft-shadow-thin",
         ["Soft Thick"] = "soft-shadow-thick",
     }
+    local patternAliases =
+    {
+        Smoke = "smoke",
+        Stillwater = "stillwater",
+    }
 
     if key == "healthTextFormat" or key == "magickaTextFormat" or key == "staminaTextFormat" then
         value = textFormatAliases[value] or value
@@ -479,6 +494,8 @@ function Settings:SetResourceBarsValue(key, value)
         value = fontAliases[value] or value
     elseif key == "textOutline" then
         value = outlineAliases[value] or value
+    elseif key == "barPatternKey" then
+        value = patternAliases[value] or value
     end
 
     self:GetResourceBars()[key] = value
@@ -1046,6 +1063,50 @@ function Settings:RegisterAddonMenu()
                     setFunc = function(value) self:SetResourceBarsValue("staminaTextureKey", value) end,
                     disabled = function() return not self:IsResourceBarsEnabled() end,
                     default = ACCOUNT_DEFAULTS.modules.resourceBars.staminaTextureKey,
+                },
+                {
+                    type = "checkbox",
+                    name = "Fill Pattern Overlay",
+                    tooltip = "Adds a low-opacity texture over the colored fill. The resource color is preserved.",
+                    getFunc = function() return self:GetResourceBars().barPatternEnabled end,
+                    setFunc = function(value) self:SetResourceBarsValue("barPatternEnabled", value) end,
+                    disabled = function() return not self:IsResourceBarsEnabled() end,
+                    default = ACCOUNT_DEFAULTS.modules.resourceBars.barPatternEnabled,
+                },
+                {
+                    type = "dropdown",
+                    name = "Fill Pattern",
+                    tooltip = "Pattern texture layered over the bar color.",
+                    choices = { "Smoke", "Stillwater" },
+                    choicesValues = { "smoke", "stillwater" },
+                    getFunc = function() return self:GetResourceBars().barPatternKey end,
+                    setFunc = function(value) self:SetResourceBarsValue("barPatternKey", value) end,
+                    disabled = function() return not self:IsResourceBarsEnabled() or not self:GetResourceBars().barPatternEnabled end,
+                    default = ACCOUNT_DEFAULTS.modules.resourceBars.barPatternKey,
+                },
+                {
+                    type = "slider",
+                    name = "Fill Pattern Opacity",
+                    tooltip = "How strongly the pattern shows over the bar color.",
+                    min = 0,
+                    max = 60,
+                    step = 1,
+                    getFunc = function() return self:GetResourceBars().barPatternOpacity end,
+                    setFunc = function(value) self:SetResourceBarsValue("barPatternOpacity", value) end,
+                    disabled = function() return not self:IsResourceBarsEnabled() or not self:GetResourceBars().barPatternEnabled end,
+                    default = ACCOUNT_DEFAULTS.modules.resourceBars.barPatternOpacity,
+                },
+                {
+                    type = "slider",
+                    name = "Fill Pattern Scale",
+                    tooltip = "Lower values repeat the pattern more often; higher values make it larger.",
+                    min = 24,
+                    max = 256,
+                    step = 4,
+                    getFunc = function() return self:GetResourceBars().barPatternScale end,
+                    setFunc = function(value) self:SetResourceBarsValue("barPatternScale", value) end,
+                    disabled = function() return not self:IsResourceBarsEnabled() or not self:GetResourceBars().barPatternEnabled end,
+                    default = ACCOUNT_DEFAULTS.modules.resourceBars.barPatternScale,
                 },
                 {
                     type = "slider",
