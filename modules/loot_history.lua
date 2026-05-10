@@ -1,0 +1,348 @@
+local ADDON_NAME = "Nirnsteel-UI"
+
+Nirnsteel_UI = Nirnsteel_UI or {}
+local LootHistory = {}
+Nirnsteel_UI.LootHistory = LootHistory
+
+local TEMPLATE_NAME = "Nirnsteel_LootHistory_KeyboardEntry"
+local STOCK_TEMPLATE_NAME = "ZO_LootHistory_KeyboardEntry"
+local PATCH_UPDATE_NAME = "Nirnsteel_UI_LootHistory_WaitForKeyboard"
+local MAX_PATCH_ATTEMPTS = 80
+local PATCH_RETRY_MS = 250
+local LOOT_HISTORY_ANCHOR_OFFSET_X = 180
+local LOOT_HISTORY_ANCHOR_OFFSET_Y = -230
+local LOOT_SOUND_THROTTLE_MS = 90
+local SEQUENTIAL_REVEAL_DELAY_MS = 260
+local DEBUG_MIX_ITEM_COUNT = 7
+
+local QUALITY_STYLE =
+{
+    [ITEM_DISPLAY_QUALITY_TRASH] = { 0.18, 0.18 },
+    [ITEM_DISPLAY_QUALITY_NORMAL] = { 0.22, 0.20 },
+    [ITEM_DISPLAY_QUALITY_MAGIC] = { 0.30, 0.28 },
+    [ITEM_DISPLAY_QUALITY_ARCANE] = { 0.42, 0.42 },
+    [ITEM_DISPLAY_QUALITY_ARTIFACT] = { 0.64, 0.62 },
+    [ITEM_DISPLAY_QUALITY_LEGENDARY] = { 0.88, 0.82 },
+    [ITEM_DISPLAY_QUALITY_MYTHIC_OVERRIDE] = { 0.92, 0.86 },
+}
+
+local lastLootSoundMS = -LOOT_SOUND_THROTTLE_MS
+local debugItemId = 900000
+
+local function IsLegendaryItemEntry(data)
+    return data
+        and data.entryType == LOOT_ENTRY_TYPE_ITEM
+        and data.displayQuality == ITEM_DISPLAY_QUALITY_LEGENDARY
+end
+
+local function PlayLootFeedbackSound(data)
+    local nowMS = GetFrameTimeMilliseconds()
+    if nowMS - lastLootSoundMS >= LOOT_SOUND_THROTTLE_MS then
+        if IsLegendaryItemEntry(data) then
+            PlaySound(SOUNDS.ANTIQUITIES_FANFARE_COMPLETED)
+        else
+            PlaySound(SOUNDS.TRIBUTE_AGENT_HEALED)
+        end
+        lastLootSoundMS = nowMS
+    end
+end
+
+local DEBUG_ITEMS =
+{
+    { name = "Rawhide Scraps", icon = "EsoUI/Art/Icons/crafting_leather_scraps.dds", quality = ITEM_DISPLAY_QUALITY_NORMAL },
+    { name = "Jora", icon = "EsoUI/Art/Icons/crafting_runecrafter_potency_rune_001.dds", quality = ITEM_DISPLAY_QUALITY_NORMAL },
+    { name = "Dwarven Oil", icon = "EsoUI/Art/Icons/crafting_smith_potion_vendor_002.dds", quality = ITEM_DISPLAY_QUALITY_MAGIC },
+    { name = "Sapphire", icon = "EsoUI/Art/Icons/crafting_jewelry_base_sapphire_r1.dds", quality = ITEM_DISPLAY_QUALITY_MAGIC },
+    { name = "Grain Solvent", icon = "EsoUI/Art/Icons/crafting_smith_potion_vendor_003.dds", quality = ITEM_DISPLAY_QUALITY_ARCANE },
+    { name = "Elegant Lining", icon = "EsoUI/Art/Icons/crafting_cloth_component_004.dds", quality = ITEM_DISPLAY_QUALITY_ARTIFACT },
+    { name = "Dreugh Wax", icon = "EsoUI/Art/Icons/crafting_forester_weapon_component_004.dds", quality = ITEM_DISPLAY_QUALITY_LEGENDARY },
+}
+
+local function GetLootHistory()
+    LootHistory:PatchKeyboardHistory()
+    return LOOT_HISTORY_KEYBOARD
+end
+
+local function CreateDebugItemData(name, icon, displayQuality, stackCount)
+    debugItemId = debugItemId + 1
+
+    return {
+        text = name,
+        icon = icon,
+        stackCount = stackCount or 1,
+        color = GetItemQualityColor(displayQuality),
+        itemId = debugItemId,
+        displayQuality = displayQuality,
+        quality = displayQuality,
+        isCraftBagItem = false,
+        isStolen = false,
+        entryType = LOOT_ENTRY_TYPE_ITEM,
+        iconOverlayText = ZO_LootHistory_Shared.GetStackCountStringFromData,
+        showIconOverlayText = ZO_LootHistory_Shared.ShouldShowStackCountStringFromData,
+    }
+end
+
+local function AddDebugLootData(data)
+    local lootHistory = GetLootHistory()
+    if not lootHistory then
+        d("Nirnsteel UI: loot history is not ready yet.")
+        return
+    end
+
+    local lootEntry = lootHistory:CreateLootEntry(data)
+    lootHistory:InsertOrQueue(lootEntry)
+end
+
+function LootHistory:DebugLegendary()
+    AddDebugLootData(CreateDebugItemData("Nirnsteel Debug Legendary", "EsoUI/Art/Icons/gear_breton_1hsword_d.dds", ITEM_DISPLAY_QUALITY_LEGENDARY, 1))
+end
+
+function LootHistory:DebugMixedItems()
+    for i = 1, DEBUG_MIX_ITEM_COUNT do
+        local item = DEBUG_ITEMS[math.random(#DEBUG_ITEMS)]
+        AddDebugLootData(CreateDebugItemData(item.name, item.icon, item.quality, math.random(1, 3)))
+    end
+end
+
+local function RegisterDebugCommands()
+    SLASH_COMMANDS["/nslootlegendary"] = function()
+        LootHistory:DebugLegendary()
+    end
+
+    SLASH_COMMANDS["/nslootmix"] = function()
+        LootHistory:DebugMixedItems()
+    end
+end
+
+local function SafeSetColor(control, colorDef, alpha)
+    if control and colorDef then
+        local r, g, b = colorDef:UnpackRGB()
+        control:SetColor(r, g, b, alpha)
+    end
+end
+
+local function GetEntryQualityStyle(data)
+    local quality = data and (data.displayQuality or data.quality)
+    local style = quality and QUALITY_STYLE[quality]
+    if style then
+        return quality, style[1], style[2]
+    end
+
+    if data and data.entryType == LOOT_ENTRY_TYPE_ITEM then
+        return ITEM_DISPLAY_QUALITY_NORMAL, 0.24, 0.22
+    end
+
+    return nil, 0.26, 0.20
+end
+
+local function PlayRarityPulse(control)
+    if not control.rarityPulseTimeline then
+        control.rarityPulseTimeline = ANIMATION_MANAGER:CreateTimelineFromVirtual("Nirnsteel_LootHistory_RarityPulse", control)
+    end
+
+    control.rarityPulseTimeline:PlayFromStart()
+end
+
+local function QueueRarityPulse(control, data)
+    control.nirnsteelPulseToken = (control.nirnsteelPulseToken or 0) + 1
+    local pulseToken = control.nirnsteelPulseToken
+
+    zo_callLater(function()
+        if control.nirnsteelPulseToken == pulseToken and not control:IsHidden() then
+            PlayRarityPulse(control)
+            PlayLootFeedbackSound(data)
+        end
+    end, 160)
+end
+
+local function ApplyVisualStyle(control, data)
+    local _, glowAlpha, frameAlpha = GetEntryQualityStyle(data)
+
+    if data and data.color then
+        SafeSetColor(control.rarityGlow, data.color, glowAlpha)
+        SafeSetColor(control.iconFrame, data.color, frameAlpha)
+    elseif control.rarityGlow then
+        control.rarityGlow:SetColor(1, 1, 1, glowAlpha)
+        control.iconFrame:SetColor(1, 1, 1, frameAlpha)
+    end
+
+    if control.background then
+        if data and data.backgroundColor then
+            local r, g, b = data.backgroundColor:UnpackRGB()
+            control.background:SetColor(r, g, b, 0.86)
+        else
+            control.background:SetColor(0.025, 0.025, 0.025, 0.86)
+        end
+    end
+
+    if control.glass then
+        control.glass:SetColor(1, 1, 1, 0.14)
+    end
+
+    QueueRarityPulse(control, data)
+end
+
+local function CopyTemplateBehavior(stream)
+    if not stream or not stream.templates then
+        return false
+    end
+
+    local stockTemplate = stream.templates[STOCK_TEMPLATE_NAME]
+    if not stockTemplate then
+        return false
+    end
+
+    if stream.templates[TEMPLATE_NAME] and stream.templates[TEMPLATE_NAME].nirnsteelTemplate then
+        return true
+    end
+
+    local wrappedTemplate =
+    {
+        equalityCheck = stockTemplate.equalityCheck,
+        equalitySetup = stockTemplate.equalitySetup,
+        headerTemplateName = stockTemplate.headerTemplateName,
+        headerSetup = stockTemplate.headerSetup,
+        headerEqualityCheck = stockTemplate.headerEqualityCheck,
+        nirnsteelTemplate = true,
+    }
+
+    wrappedTemplate.setup = function(control, data)
+        stockTemplate.setup(control, data)
+        ApplyVisualStyle(control, data)
+    end
+
+    stream:AddTemplate(TEMPLATE_NAME, wrappedTemplate)
+    return true
+end
+
+local function MoveLootHistoryControl(lootHistory)
+    local control = lootHistory and lootHistory.control
+    if not control then
+        return
+    end
+
+    control:ClearAnchors()
+    control:SetAnchor(BOTTOMRIGHT, GuiRoot, CENTER, LOOT_HISTORY_ANCHOR_OFFSET_X, LOOT_HISTORY_ANCHOR_OFFSET_Y)
+end
+
+local function ScheduleNextReveal(stream)
+    if stream.nirnsteelRevealScheduled then
+        return
+    end
+
+    stream.nirnsteelRevealScheduled = true
+    zo_callLater(function()
+        stream.nirnsteelRevealScheduled = false
+        if not stream.paused then
+            stream:DisplayBatches()
+        end
+    end, SEQUENTIAL_REVEAL_DELAY_MS)
+end
+
+local function InstallSequentialReveal(stream)
+    if not stream or stream.nirnsteelSequentialReveal then
+        return
+    end
+
+    stream.nirnsteelSequentialReveal = true
+
+    stream.DisplayBatches = function(self)
+        local nowMS = GetFrameTimeMilliseconds()
+        if self.nirnsteelNextRevealMS and nowMS < self.nirnsteelNextRevealMS then
+            ScheduleNextReveal(self)
+            return
+        end
+
+        while self:CanDisplayMore() do
+            local currentBatch = self.queuedBatches[1]
+            if not currentBatch then
+                return
+            end
+
+            local iterator = currentBatch.iterator
+            if not iterator or iterator < 1 then
+                table.remove(self.queuedBatches, 1)
+            elseif self:CanDisplayEntry() then
+                local hasCurrentEntries = self.currentNumDisplayedEntries > 0
+                local control = self:DisplayEntry(currentBatch[iterator].templateName, currentBatch[iterator].entry, 0, hasCurrentEntries)
+                self.bottomEntry = control
+
+                currentBatch.iterator = iterator - 1
+                if currentBatch.iterator < 1 then
+                    table.remove(self.queuedBatches, 1)
+                end
+
+                self.control:SetAlpha(1)
+                self.containerStartTimeMs = nowMS
+                self.doesContainsEntries = true
+                self.nirnsteelNextRevealMS = nowMS + SEQUENTIAL_REVEAL_DELAY_MS
+                ScheduleNextReveal(self)
+                return
+            else
+                return
+            end
+        end
+    end
+end
+
+function LootHistory:PatchKeyboardHistory()
+    local lootHistory = LOOT_HISTORY_KEYBOARD
+    if not lootHistory or lootHistory.nirnsteelPatched then
+        return lootHistory and lootHistory.nirnsteelPatched
+    end
+
+    local normalPatched = CopyTemplateBehavior(lootHistory.lootStream)
+    local persistentPatched = CopyTemplateBehavior(lootHistory.lootStreamPersistent)
+    if not normalPatched or not persistentPatched then
+        return false
+    end
+
+    lootHistory.entryTemplate = TEMPLATE_NAME
+    MoveLootHistoryControl(lootHistory)
+
+    if lootHistory.lootStream then
+        lootHistory.lootStream.anchor = ZO_Anchor:New(BOTTOMRIGHT, GuiRoot, CENTER, LOOT_HISTORY_ANCHOR_OFFSET_X, LOOT_HISTORY_ANCHOR_OFFSET_Y)
+        InstallSequentialReveal(lootHistory.lootStream)
+        lootHistory.lootStream:SetContainerShowTime(3100)
+        lootHistory.lootStream:SetAdditionalEntrySpacingY(3)
+    end
+
+    if lootHistory.lootStreamPersistent then
+        lootHistory.lootStreamPersistent.anchor = ZO_Anchor:New(BOTTOMRIGHT, GuiRoot, CENTER, LOOT_HISTORY_ANCHOR_OFFSET_X, LOOT_HISTORY_ANCHOR_OFFSET_Y)
+        InstallSequentialReveal(lootHistory.lootStreamPersistent)
+        lootHistory.lootStreamPersistent:SetContainerShowTime(5600)
+        lootHistory.lootStreamPersistent:SetAdditionalEntrySpacingY(3)
+    end
+
+    lootHistory.nirnsteelPatched = true
+    return true
+end
+
+function LootHistory:StartPatchWhenReady()
+    local attempts = 0
+    EVENT_MANAGER:RegisterForUpdate(PATCH_UPDATE_NAME, PATCH_RETRY_MS, function()
+        attempts = attempts + 1
+        if self:PatchKeyboardHistory() or attempts >= MAX_PATCH_ATTEMPTS then
+            EVENT_MANAGER:UnregisterForUpdate(PATCH_UPDATE_NAME)
+        end
+    end)
+end
+
+function Nirnsteel_UI_LootHistory_Entry_OnInitialized(control)
+    ZO_LootHistory_Shared_OnInitialized(control)
+    control.rarityGlow = control:GetNamedChild("RarityGlow")
+    control.glass = control:GetNamedChild("Glass")
+    control.iconFrame = control:GetNamedChild("IconFrame")
+end
+
+local function OnAddOnLoaded(_, addonName)
+    if addonName ~= ADDON_NAME then
+        return
+    end
+
+    EVENT_MANAGER:UnregisterForEvent(ADDON_NAME, EVENT_ADD_ON_LOADED)
+    LootHistory:StartPatchWhenReady()
+    RegisterDebugCommands()
+end
+
+EVENT_MANAGER:RegisterForEvent(ADDON_NAME, EVENT_ADD_ON_LOADED, OnAddOnLoaded)
