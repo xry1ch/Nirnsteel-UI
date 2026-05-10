@@ -36,6 +36,10 @@ local ACCOUNT_DEFAULTS =
             soundThrottleMS = 40,
             savedSctSettings = {},
         },
+        actionBarFrames =
+        {
+            enabled = true,
+        },
     },
 }
 
@@ -148,6 +152,10 @@ function Settings:GetDamageNumbersPosition()
     return self.server.modules.damageNumbers
 end
 
+function Settings:GetActionBarFrames()
+    return self.account.modules.actionBarFrames
+end
+
 function Settings:IsLootHistoryEnabled()
     return self:GetLootHistory().enabled
 end
@@ -244,6 +252,17 @@ function Settings:SetDamageNumbersPosition(x, y)
     local position = self:GetDamageNumbersPosition()
     position.x = x
     position.y = y
+end
+
+function Settings:IsActionBarFramesEnabled()
+    return self:GetActionBarFrames().enabled
+end
+
+function Settings:SetActionBarFramesEnabled(value)
+    self:GetActionBarFrames().enabled = value
+    if Nirnsteel_UI.ActionBarFrames then
+        Nirnsteel_UI.ActionBarFrames:RefreshSettings()
+    end
 end
 
 function Settings:RegisterAddonMenu()
@@ -542,6 +561,22 @@ function Settings:RegisterAddonMenu()
                     setFunc = function(value) self:SetDamageNumberValue("soundThrottleMS", value) end,
                     disabled = function() return not self:IsDamageNumbersEnabled() or not self:AreDamageNumberCritSoundsEnabled() end,
                     default = ACCOUNT_DEFAULTS.modules.damageNumbers.soundThrottleMS,
+                },
+            },
+        },
+        {
+            type = "submenu",
+            name = "Action Bar Frames",
+            tooltip = "Settings for Nirnsteel action bar slot frame textures.",
+            controls =
+            {
+                {
+                    type = "checkbox",
+                    name = "Enable Action Bar Frames Module",
+                    tooltip = "Replaces action bar button frames and highlights ready ultimate and quickslot cooldown states.",
+                    getFunc = function() return self:IsActionBarFramesEnabled() end,
+                    setFunc = function(value) self:SetActionBarFramesEnabled(value) end,
+                    default = ACCOUNT_DEFAULTS.modules.actionBarFrames.enabled,
                 },
             },
         },
