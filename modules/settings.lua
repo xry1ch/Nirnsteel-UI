@@ -7,6 +7,88 @@ Nirnsteel_UI = Nirnsteel_UI or {}
 local Settings = {}
 Nirnsteel_UI.Settings = Settings
 
+local LAM_SLIDER_HANDLER_NAMESPACE = "LAM2_Slider"
+local LAM_SLIDER_GLOBAL_MOUSE_UP_PREFIX = "^LAM_Slider_OnGlobalMouseUp_"
+
+local function ClearLamSliderMouseWheel(control)
+    if not control then
+        return
+    end
+
+    if control.slider then
+        control.slider:SetHandler("OnMouseWheel", nil, LAM_SLIDER_HANDLER_NAMESPACE)
+    end
+
+    if control.slidervalue then
+        control.slidervalue:SetHandler("OnFocusGained", nil, LAM_SLIDER_HANDLER_NAMESPACE)
+        control.slidervalue:SetHandler("OnFocusLost", nil, LAM_SLIDER_HANDLER_NAMESPACE)
+        control.slidervalue:SetHandler("OnMouseWheel", nil, LAM_SLIDER_HANDLER_NAMESPACE)
+    end
+end
+
+local function DisableLamSliderMouseWheelSupport()
+    if not LAMCreateControl or not LAMCreateControl.slider or LAMCreateControl.nirnsteelNoMouseWheelSliders then
+        return
+    end
+
+    local originalSliderFactory = LAMCreateControl.slider
+    LAMCreateControl.nirnsteelNoMouseWheelSliders = true
+
+    LAMCreateControl.slider = function(parent, sliderData, controlName)
+        if not sliderData or not sliderData.nirnsteelDisableMouseWheel then
+            return originalSliderFactory(parent, sliderData, controlName)
+        end
+
+        local originalRegisterForEvent = EVENT_MANAGER and EVENT_MANAGER.RegisterForEvent
+
+        if originalRegisterForEvent then
+            EVENT_MANAGER.RegisterForEvent = function(eventManager, namespace, event, ...)
+                if event == EVENT_GLOBAL_MOUSE_UP
+                    and type(namespace) == "string"
+                    and string.find(namespace, LAM_SLIDER_GLOBAL_MOUSE_UP_PREFIX)
+                then
+                    return
+                end
+
+                return originalRegisterForEvent(eventManager, namespace, event, ...)
+            end
+        end
+
+        local ok, control = xpcall(function()
+            return originalSliderFactory(parent, sliderData, controlName)
+        end, function(errorMessage)
+            return errorMessage
+        end)
+
+        if originalRegisterForEvent then
+            EVENT_MANAGER.RegisterForEvent = originalRegisterForEvent
+        end
+
+        if not ok then
+            error(control)
+        end
+
+        ClearLamSliderMouseWheel(control)
+        return control
+    end
+end
+
+local function MarkSliderOptionsNoMouseWheel(options)
+    if not options then
+        return
+    end
+
+    for _, option in ipairs(options) do
+        if option.type == "slider" then
+            option.nirnsteelDisableMouseWheel = true
+        end
+
+        if option.controls then
+            MarkSliderOptionsNoMouseWheel(option.controls)
+        end
+    end
+end
+
 local ACCOUNT_DEFAULTS =
 {
     modules =
@@ -65,7 +147,13 @@ local ACCOUNT_DEFAULTS =
             intensity = 100,
             visibilityMode = "fade",
             chunkSoundKey = "PROMOTIONAL_EVENT_REWARD_TO_CLAIM_PROMPT",
+            levelUpSoundKey = "BATTLEGROUND_ROUND_RECAP_SCREEN_FINAL_WIN",
             showGainText = true,
+            showProgressText = true,
+            showChampionIcon = true,
+            levelUpAnimationEnabled = true,
+            levelUpIntensity = 100,
+            hideBackground = false,
             hideStockProgressBar = true,
         },
         resourceBars =
@@ -734,6 +822,8 @@ function Settings:RegisterAddonMenu()
         return
     end
 
+    DisableLamSliderMouseWheelSupport()
+
     local panelName = "Nirnsteel_UI_Settings"
     local panelData =
     {
@@ -1209,6 +1299,33 @@ function Settings:RegisterAddonMenu()
                     default = ACCOUNT_DEFAULTS.modules.experienceTracker.showGainText,
                 },
                 {
+                    type = "checkbox",
+                    name = "Show Progress Text",
+                    tooltip = "Shows the current XP progress amount and percentage.",
+                    getFunc = function() return self:GetExperienceTracker().showProgressText end,
+                    setFunc = function(value) self:SetExperienceTrackerValue("showProgressText", value) end,
+                    disabled = function() return not self:IsExperienceTrackerEnabled() end,
+                    default = ACCOUNT_DEFAULTS.modules.experienceTracker.showProgressText,
+                },
+                {
+                    type = "checkbox",
+                    name = "Show Champion Icon",
+                    tooltip = "Shows the Champion discipline icon inside the tracker badge.",
+                    getFunc = function() return self:GetExperienceTracker().showChampionIcon end,
+                    setFunc = function(value) self:SetExperienceTrackerValue("showChampionIcon", value) end,
+                    disabled = function() return not self:IsExperienceTrackerEnabled() end,
+                    default = ACCOUNT_DEFAULTS.modules.experienceTracker.showChampionIcon,
+                },
+                {
+                    type = "checkbox",
+                    name = "Hide Background",
+                    tooltip = "Hides the tracker panel background while keeping the badge and progress bar visible.",
+                    getFunc = function() return self:GetExperienceTracker().hideBackground end,
+                    setFunc = function(value) self:SetExperienceTrackerValue("hideBackground", value) end,
+                    disabled = function() return not self:IsExperienceTrackerEnabled() end,
+                    default = ACCOUNT_DEFAULTS.modules.experienceTracker.hideBackground,
+                },
+                {
                     type = "dropdown",
                     name = "Visibility",
                     tooltip = "Chooses whether the tracker fades after XP gains or stays visible on the HUD.",
@@ -1238,9 +1355,44 @@ function Settings:RegisterAddonMenu()
                         "ENDLESS_DUNGEON_COUNTER_DOWN",
                     },
                     getFunc = function() return self:GetExperienceTracker().chunkSoundKey end,
-                    setFunc = function(value) self:SetExperienceTrackerValue("chunkSoundKey", value) end,
+                    setFunc = function(value)
+                        self:SetExperienceTrackerValue("chunkSoundKey", value)
+                        if Nirnsteel_UI.ExperienceTracker and Nirnsteel_UI.ExperienceTracker.PreviewChunkSound then
+                            Nirnsteel_UI.ExperienceTracker:PreviewChunkSound()
+                        end
+                    end,
                     disabled = function() return not self:IsExperienceTrackerEnabled() end,
                     default = ACCOUNT_DEFAULTS.modules.experienceTracker.chunkSoundKey,
+                },
+                {
+                    type = "dropdown",
+                    name = "Level Up Sound",
+                    tooltip = "Chooses the sound played when the tracker reaches a new level or Champion Point.",
+                    choices =
+                    {
+                        "None",
+                        "Battleground Round Recap Final Win",
+                        "Battleground Round Recap Win",
+                    },
+                    choicesValues =
+                    {
+                        "none",
+                        "BATTLEGROUND_ROUND_RECAP_SCREEN_FINAL_WIN",
+                        "BATTLEGROUND_ROUND_RECAP_SCREEN_WIN",
+                    },
+                    getFunc = function() return self:GetExperienceTracker().levelUpSoundKey end,
+                    setFunc = function(value) self:SetExperienceTrackerValue("levelUpSoundKey", value) end,
+                    disabled = function() return not self:IsExperienceTrackerEnabled() end,
+                    default = ACCOUNT_DEFAULTS.modules.experienceTracker.levelUpSoundKey,
+                },
+                {
+                    type = "checkbox",
+                    name = "Enable Level Up Animation",
+                    tooltip = "Plays the special burst animation when reaching a new level or Champion Point.",
+                    getFunc = function() return self:GetExperienceTracker().levelUpAnimationEnabled end,
+                    setFunc = function(value) self:SetExperienceTrackerValue("levelUpAnimationEnabled", value) end,
+                    disabled = function() return not self:IsExperienceTrackerEnabled() end,
+                    default = ACCOUNT_DEFAULTS.modules.experienceTracker.levelUpAnimationEnabled,
                 },
                 {
                     type = "slider",
@@ -1313,6 +1465,21 @@ function Settings:RegisterAddonMenu()
                     setFunc = function(value) self:SetExperienceTrackerValue("intensity", value) end,
                     disabled = function() return not self:IsExperienceTrackerEnabled() end,
                     default = ACCOUNT_DEFAULTS.modules.experienceTracker.intensity,
+                },
+                {
+                    type = "slider",
+                    name = "Level Up Animation Strength",
+                    tooltip = "Controls the strength of the special level-up burst animation.",
+                    min = 0,
+                    max = 160,
+                    step = 5,
+                    getFunc = function() return self:GetExperienceTracker().levelUpIntensity end,
+                    setFunc = function(value) self:SetExperienceTrackerValue("levelUpIntensity", value) end,
+                    disabled = function()
+                        return not self:IsExperienceTrackerEnabled()
+                            or not self:GetExperienceTracker().levelUpAnimationEnabled
+                    end,
+                    default = ACCOUNT_DEFAULTS.modules.experienceTracker.levelUpIntensity,
                 },
                 {
                     type = "button",
@@ -1883,6 +2050,8 @@ function Settings:RegisterAddonMenu()
             },
         },
     }
+
+    MarkSliderOptionsNoMouseWheel(options)
 
     LAM:RegisterAddonPanel(panelName, panelData)
     LAM:RegisterOptionControls(panelName, options)
