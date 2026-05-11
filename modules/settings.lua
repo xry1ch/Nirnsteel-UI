@@ -25,6 +25,7 @@ local ACCOUNT_DEFAULTS =
             hideDefaultDamage = true,
             critSoundEnabled = true,
             fontKey = "trajan",
+            textEffect = "none",
             critSoundKey = "RETURNING_PLAYER_OPEN_KEYBOARD",
             normalFontSize = 32,
             critFontSize = 65,
@@ -726,6 +727,27 @@ function Settings:RegisterAddonMenu()
                     setFunc = function(value) self:SetDamageNumberValue("fontKey", value) end,
                     disabled = function() return not self:IsDamageNumbersEnabled() end,
                     default = ACCOUNT_DEFAULTS.modules.damageNumbers.fontKey,
+                },
+                {
+                    type = "dropdown",
+                    name = "Text Effect",
+                    tooltip = "Applies an optional text effect to damage numbers.",
+                    choices =
+                    {
+                        "None",
+                        "Shadow",
+                        "Outline",
+                    },
+                    choicesValues =
+                    {
+                        "none",
+                        "shadow",
+                        "outline",
+                    },
+                    getFunc = function() return self:GetDamageNumbers().textEffect end,
+                    setFunc = function(value) self:SetDamageNumberValue("textEffect", value) end,
+                    disabled = function() return not self:IsDamageNumbersEnabled() end,
+                    default = ACCOUNT_DEFAULTS.modules.damageNumbers.textEffect,
                 },
                 {
                     type = "dropdown",

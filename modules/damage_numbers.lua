@@ -12,6 +12,7 @@ local DEFAULT_SETTINGS =
     hideDefaultDamage = true,
     critSoundEnabled = true,
     fontKey = "antique",
+    textEffect = "none",
     critSoundKey = "CONSOLE_GAME_ENTER",
     normalFontSize = 56,
     critFontSize = 78,
@@ -64,6 +65,16 @@ local SOUND_KEYS =
 {
     CONSOLE_GAME_ENTER = "CONSOLE_GAME_ENTER",
     RETURNING_PLAYER_OPEN_KEYBOARD = "RETURNING_PLAYER_OPEN_KEYBOARD",
+}
+
+local TEXT_EFFECT_ALIASES =
+{
+    none = "none",
+    None = "none",
+    shadow = "shadow",
+    Shadow = "shadow",
+    outline = "outline",
+    Outline = "outline",
 }
 
 local FALLBACK_SOUND_KEYS =
@@ -177,6 +188,14 @@ end
 
 local function BuildFont(size)
     local fontFace = FONT_FACES[GetSettingValue("fontKey")] or FONT_FACES.antique
+    local textEffect = TEXT_EFFECT_ALIASES[GetSettingValue("textEffect")] or "none"
+    if textEffect == "shadow" then
+        return string.format("%s|%d|soft-shadow-thick", fontFace, size)
+    end
+    if textEffect == "outline" then
+        return string.format("%s|%d|thick-outline", fontFace, size)
+    end
+
     return string.format("%s|%d", fontFace, size)
 end
 
