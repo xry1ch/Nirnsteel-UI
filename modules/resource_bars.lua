@@ -35,6 +35,13 @@ local DEFAULT_SETTINGS =
     barPatternKey = "Molten",
     barPatternOpacity = 6,
     barPatternScale = 228,
+    feedbackEnabled = true,
+    feedbackIntensity = 95,
+    gainPulseEnabled = true,
+    spendPulseEnabled = true,
+    fullResourcePulseEnabled = true,
+    shieldPulseEnabled = true,
+    lowResourceGlowEnabled = true,
     borderWidth = 0,
     cornerSize = 2,
     innerShadowAlpha = 60,
@@ -59,6 +66,10 @@ local MIN_BAR_HEIGHT = 10
 local MAX_BAR_HEIGHT = 48
 local MIN_ALPHA = 10
 local MAX_ALPHA = 100
+local MIN_FEEDBACK_DELTA_RATIO = 0.015
+local MIN_FEEDBACK_INTERVAL_MS = 140
+local LOW_RESOURCE_HEALTH_RATIO = 0.35
+local LOW_RESOURCE_OTHER_RATIO = 0.25
 local EDGE_FRAME_TEXTURE = "EsoUI/Art/Miscellaneous/Gamepad/edgeframeGamepadBorder_thin.dds"
 
 local BAR_TEXTURES =
@@ -270,6 +281,34 @@ local function ShouldShowBarPattern()
     return GetSettingValue("barPatternEnabled") == true
 end
 
+local function ShouldShowFeedback()
+    return GetSettingValue("feedbackEnabled") == true
+end
+
+local function GetFeedbackIntensity()
+    return ClampNumber(GetSettingValue("feedbackIntensity"), 0, 100) / 100
+end
+
+local function ShouldShowGainPulse()
+    return ShouldShowFeedback() and GetSettingValue("gainPulseEnabled") ~= false
+end
+
+local function ShouldShowSpendPulse()
+    return ShouldShowFeedback() and GetSettingValue("spendPulseEnabled") ~= false
+end
+
+local function ShouldShowFullResourcePulse()
+    return ShouldShowFeedback() and GetSettingValue("fullResourcePulseEnabled") ~= false
+end
+
+local function ShouldShowShieldPulse()
+    return ShouldShowFeedback() and GetSettingValue("shieldPulseEnabled") ~= false
+end
+
+local function ShouldShowLowResourceGlow()
+    return ShouldShowFeedback() and GetSettingValue("lowResourceGlowEnabled") ~= false
+end
+
 local function BuildTextFont()
     local face = FONT_FACES[GetSettingValue("textFontKey")] or FONT_FACES.gameSmall
     local size = ClampNumber(GetSettingValue("textSize"), 8, 32)
@@ -304,6 +343,76 @@ local function ConfigureStatusBar(bar, data, key)
     bar:SetGradientColors(data.color[1], data.color[2], data.color[3], data.color[4], data.endColor[1], data.endColor[2], data.endColor[3], data.endColor[4])
 end
 
+local function GetResourceColor(key)
+    local data = RESOURCE_DATA[key] or RESOURCE_DATA.health
+    local color = data.endColor or data.color
+    return color[1], color[2], color[3]
+end
+
+local function PlayAlphaFeedback(control, startAlpha, durationMS)
+    if not control or startAlpha <= 0 then
+        return
+    end
+
+    local animation = control.nirnsteelAlphaAnimation
+    local timeline = control.nirnsteelAlphaTimeline
+    if not animation then
+        animation, timeline = CreateSimpleAnimation(ANIMATION_ALPHA, control)
+        animation:SetHandler("OnStop", function(_, completedPlaying)
+            if completedPlaying then
+                control:SetAlpha(0)
+                control:SetHidden(true)
+            end
+        end)
+        control.nirnsteelAlphaAnimation = animation
+        control.nirnsteelAlphaTimeline = timeline
+    end
+
+    control:SetHidden(false)
+    control:SetAlpha(startAlpha)
+    animation:SetAlphaValues(startAlpha, 0)
+    animation:SetDuration(durationMS)
+    timeline:SetPlaybackType(ANIMATION_PLAYBACK_ONE_SHOT, 0)
+    timeline:PlayFromStart()
+end
+
+local function ConfigureFeedbackTexture(texture, parent, drawLevel)
+    texture:SetAnchorFill(parent)
+    texture:SetTexture(DEFAULT_BAR_TEXTURE_INFO.texture)
+    texture:SetTextureCoords(unpack(DEFAULT_BAR_TEXTURE_INFO.coords))
+    texture:EnableLeadingEdge(false)
+    texture:SetPixelRoundingEnabled(false)
+    texture:SetDrawLayer(DL_OVERLAY)
+    texture:SetDrawLevel(drawLevel or 2)
+    texture:SetAlpha(0)
+    texture:SetHidden(true)
+end
+
+local function HideFeedbackControl(control)
+    if not control then
+        return
+    end
+
+    if control.nirnsteelAlphaTimeline then
+        control.nirnsteelAlphaTimeline:Stop()
+    end
+    control:SetAlpha(0)
+    control:SetHidden(true)
+end
+
+local function HideFrameFeedback(frame)
+    if not frame then
+        return
+    end
+
+    HideFeedbackControl(frame.feedbackFlash)
+    HideFeedbackControl(frame.readyFlash)
+    HideFeedbackControl(frame.shieldPulse)
+    if frame.lowResourceGlow then
+        frame.lowResourceGlow:SetHidden(true)
+    end
+end
+
 local function SetResourceFillDirection(frame, key)
     local alignment = BAR_ALIGNMENT_NORMAL
     if key == "health" then
@@ -320,6 +429,15 @@ local function SetResourceFillDirection(frame, key)
     end
     if frame.gloss and frame.gloss.SetBarAlignment then
         frame.gloss:SetBarAlignment(alignment)
+    end
+    if frame.feedbackFlash and frame.feedbackFlash.SetBarAlignment then
+        frame.feedbackFlash:SetBarAlignment(alignment)
+    end
+    if frame.readyFlash and frame.readyFlash.SetBarAlignment then
+        frame.readyFlash:SetBarAlignment(alignment)
+    end
+    if frame.shieldPulse and frame.shieldPulse.SetBarAlignment then
+        frame.shieldPulse:SetBarAlignment(alignment)
     end
 end
 
@@ -538,6 +656,25 @@ function ResourceBars:CreateResourceBar(key, data)
     frame.patternBar:SetDrawLevel(1)
     frame.patternBar:SetHidden(true)
 
+    frame.feedbackFlash = WINDOW_MANAGER:CreateControl(nil, frame.track, CT_STATUSBAR)
+    frame.feedbackFlash:SetMinMax(0, 1)
+    frame.feedbackFlash:SetValue(1)
+    ConfigureFeedbackTexture(frame.feedbackFlash, frame.track, 3)
+
+    frame.readyFlash = WINDOW_MANAGER:CreateControl(nil, frame.track, CT_STATUSBAR)
+    frame.readyFlash:SetMinMax(0, 1)
+    frame.readyFlash:SetValue(1)
+    ConfigureFeedbackTexture(frame.readyFlash, frame.track, 4)
+
+    frame.lowResourceGlow = WINDOW_MANAGER:CreateControl(nil, frame, CT_BACKDROP)
+    frame.lowResourceGlow:SetAnchor(TOPLEFT, frame, TOPLEFT, -4, -4)
+    frame.lowResourceGlow:SetAnchor(BOTTOMRIGHT, frame, BOTTOMRIGHT, 4, 4)
+    frame.lowResourceGlow:SetCenterColor(0, 0, 0, 0)
+    frame.lowResourceGlow:SetEdgeTexture(EDGE_FRAME_TEXTURE, 128, 16, 4, 0)
+    frame.lowResourceGlow:SetDrawLayer(DL_OVERLAY)
+    frame.lowResourceGlow:SetDrawLevel(1)
+    frame.lowResourceGlow:SetHidden(true)
+
     if key == "health" then
         frame.shieldBar = WINDOW_MANAGER:CreateControl(nil, frame.track, CT_STATUSBAR)
         SetStatusBarTextures(frame.shieldBar, DEFAULT_BAR_TEXTURE_INFO)
@@ -556,6 +693,11 @@ function ResourceBars:CreateResourceBar(key, data)
         frame.shieldGlow:SetDrawLayer(DL_OVERLAY)
         frame.shieldGlow:SetDrawLevel(2)
         frame.shieldGlow:SetHidden(true)
+
+        frame.shieldPulse = WINDOW_MANAGER:CreateControl(nil, frame.track, CT_STATUSBAR)
+        frame.shieldPulse:SetMinMax(0, 1)
+        frame.shieldPulse:SetValue(1)
+        ConfigureFeedbackTexture(frame.shieldPulse, frame.track, 5)
     end
 
     frame.gloss = CreateGloss(frame.bar, key)
@@ -860,6 +1002,11 @@ function ResourceBars:ApplyLayoutGeometry()
         local state = self.state and self.state[key]
         if state then
             self:UpdatePatternOverlay(self.bars[key], state.current or 0, state.maximum or 0)
+            if ShouldShowFeedback() then
+                self:UpdateLowResourceFeedback(self.bars[key], key, state.current or 0, state.maximum or 0)
+            else
+                HideFrameFeedback(self.bars[key])
+            end
         end
     end
 end
@@ -954,6 +1101,100 @@ function ResourceBars:UpdateBarValue(frame, current, maximum, instant)
     self:UpdatePatternOverlay(frame, current, maximum)
 end
 
+function ResourceBars:PlayResourcePulse(frame, key, pulseType, deltaRatio)
+    if not frame or not frame.feedbackFlash then
+        return
+    end
+
+    local now = GetFrameTimeMilliseconds()
+    frame.lastFeedbackMS = frame.lastFeedbackMS or {}
+    local lastMS = frame.lastFeedbackMS[pulseType] or 0
+    if now - lastMS < MIN_FEEDBACK_INTERVAL_MS then
+        return
+    end
+    frame.lastFeedbackMS[pulseType] = now
+
+    local intensity = GetFeedbackIntensity()
+    if intensity <= 0 then
+        return
+    end
+
+    local r, g, b = GetResourceColor(key)
+    local alpha = zo_clamp((0.42 + (deltaRatio * 1.8)) * intensity, 0, 0.85)
+    local duration = pulseType == "gain" and 420 or 320
+
+    if pulseType == "spend" then
+        r = zo_clamp(r + 0.18, 0, 1)
+        g = zo_clamp(g + 0.18, 0, 1)
+        b = zo_clamp(b + 0.18, 0, 1)
+    end
+
+    frame.feedbackFlash:SetColor(r, g, b, alpha)
+    PlayAlphaFeedback(frame.feedbackFlash, alpha, duration)
+end
+
+function ResourceBars:PlayFullResourcePulse(frame, key)
+    if not frame or not frame.readyFlash then
+        return
+    end
+
+    local intensity = GetFeedbackIntensity()
+    if intensity <= 0 then
+        return
+    end
+
+    local r, g, b = GetResourceColor(key)
+    local alpha = 0.72 * intensity
+    frame.readyFlash:SetColor(zo_clamp(r + 0.22, 0, 1), zo_clamp(g + 0.22, 0, 1), zo_clamp(b + 0.22, 0, 1), alpha)
+    PlayAlphaFeedback(frame.readyFlash, alpha, 520)
+end
+
+function ResourceBars:PlayShieldPulse(frame)
+    if not frame or not frame.shieldPulse then
+        return
+    end
+
+    local intensity = GetFeedbackIntensity()
+    if intensity <= 0 then
+        return
+    end
+
+    local shieldGlowColor = GetSettingValue("shieldGlowColor") or DEFAULT_SETTINGS.shieldGlowColor
+    local r = tonumber(shieldGlowColor.r) or DEFAULT_SETTINGS.shieldGlowColor.r
+    local g = tonumber(shieldGlowColor.g) or DEFAULT_SETTINGS.shieldGlowColor.g
+    local b = tonumber(shieldGlowColor.b) or DEFAULT_SETTINGS.shieldGlowColor.b
+    local alpha = 0.75 * intensity
+    frame.shieldPulse:SetColor(r, g, b, alpha)
+    PlayAlphaFeedback(frame.shieldPulse, alpha, 500)
+end
+
+function ResourceBars:UpdateLowResourceFeedback(frame, key, current, maximum)
+    if not frame or not frame.lowResourceGlow then
+        return
+    end
+
+    local maxValue = tonumber(maximum) or 0
+    local ratio = maxValue > 0 and zo_clamp((tonumber(current) or 0) / maxValue, 0, 1) or 1
+    local threshold = key == "health" and LOW_RESOURCE_HEALTH_RATIO or LOW_RESOURCE_OTHER_RATIO
+    if not ShouldShowLowResourceGlow() or ratio <= 0 or ratio >= threshold then
+        frame.lowResourceGlow:SetHidden(true)
+        return
+    end
+
+    local intensity = GetFeedbackIntensity()
+    if intensity <= 0 then
+        frame.lowResourceGlow:SetHidden(true)
+        return
+    end
+
+    local r, g, b = GetResourceColor(key)
+    local urgency = (threshold - ratio) / threshold
+    local alpha = zo_clamp((0.18 + urgency * 0.35) * intensity, 0.08, 0.52)
+    frame.lowResourceGlow:SetEdgeColor(r, g, b, alpha)
+    frame.lowResourceGlow:SetCenterColor(r, g, b, alpha * 0.08)
+    frame.lowResourceGlow:SetHidden(false)
+end
+
 function ResourceBars:UpdatePatternOverlay(frame, current, maximum)
     if not frame or not frame.patternBar then
         return
@@ -1024,6 +1265,8 @@ end
 function ResourceBars:UpdateResource(key, current, maximum, effectiveMax, instant)
     self.state = self.state or {}
     self.state[key] = self.state[key] or {}
+    local previousCurrent = self.state[key].current
+    local previousMaximum = self.state[key].maximum
     self.state[key].current = current
     self.state[key].maximum = maximum
     self.state[key].effectiveMax = effectiveMax or maximum
@@ -1035,6 +1278,27 @@ function ResourceBars:UpdateResource(key, current, maximum, effectiveMax, instan
     end
 
     self:UpdateBarValue(frame, current, maximum, instant or key == "health")
+
+    local currentValue = tonumber(current) or 0
+    local maximumValue = tonumber(maximum) or 0
+    local previousCurrentValue = tonumber(previousCurrent)
+    local previousMaximumValue = tonumber(previousMaximum)
+    if not instant and previousCurrentValue and previousMaximumValue and previousMaximumValue > 0 and maximumValue > 0 then
+        local delta = currentValue - previousCurrentValue
+        local deltaRatio = math.abs(delta) / maximumValue
+        if deltaRatio >= MIN_FEEDBACK_DELTA_RATIO then
+            if delta > 0 and ShouldShowGainPulse() then
+                self:PlayResourcePulse(frame, key, "gain", deltaRatio)
+            elseif delta < 0 and ShouldShowSpendPulse() then
+                self:PlayResourcePulse(frame, key, "spend", deltaRatio)
+            end
+        end
+
+        if currentValue >= maximumValue and previousCurrentValue < previousMaximumValue and ShouldShowFullResourcePulse() then
+            self:PlayFullResourcePulse(frame, key)
+        end
+    end
+
     if key == "health" then
         self:UpdateHealthShieldOverlay(current, maximum)
     end
@@ -1069,6 +1333,7 @@ end
 
 function ResourceBars:RefreshShieldState(force)
     local value, maxValue, sequenceId = GetUnitAttributeVisualizerEffectInfo("player", ATTRIBUTE_VISUAL_POWER_SHIELDING, STAT_MITIGATION, ATTRIBUTE_HEALTH, COMBAT_MECHANIC_FLAGS_HEALTH)
+    local previousShield = self.shieldValue or 0
     self.shieldValue = math.max(tonumber(value) or 0, 0)
     self.shieldMax = math.max(tonumber(maxValue) or 0, 0)
     self.shieldSequenceId = sequenceId or self.shieldSequenceId
@@ -1078,9 +1343,40 @@ function ResourceBars:RefreshShieldState(force)
         self:UpdateHealthShieldOverlay(health.current or 0, health.maximum or 0)
     end
 
+    if not force and self.shieldValue > previousShield and ShouldShowShieldPulse() then
+        local frame = self.bars and self.bars.health
+        self:PlayShieldPulse(frame)
+    end
+
     if force then
         self:UpdateAllLabels()
     end
+end
+
+function ResourceBars:PreviewFeedback()
+    self:RefreshPowerValues(true)
+    self:ApplyLayout()
+    self:GetRoot():SetHidden(false)
+
+    for index, key in ipairs(BAR_ORDER) do
+        local frame = self.bars and self.bars[key]
+        if frame then
+            zo_callLater(function()
+                self:PlayResourcePulse(frame, key, "gain", 0.18)
+            end, (index - 1) * 180)
+            zo_callLater(function()
+                self:PlayResourcePulse(frame, key, "spend", 0.18)
+            end, 650 + ((index - 1) * 180))
+            zo_callLater(function()
+                self:PlayFullResourcePulse(frame, key)
+            end, 1300 + ((index - 1) * 180))
+        end
+    end
+
+    zo_callLater(function()
+        local health = self.bars and self.bars.health
+        self:PlayShieldPulse(health)
+    end, 1950)
 end
 
 function ResourceBars:OnShieldVisualAdded(unitTag, visualType, statType, attributeType, powerType, value, maxValue, sequenceId)
@@ -1092,6 +1388,10 @@ function ResourceBars:OnShieldVisualAdded(unitTag, visualType, statType, attribu
     self.shieldMax = math.max((self.shieldMax or 0) + (tonumber(maxValue) or 0), 0)
     self.shieldSequenceId = sequenceId or self.shieldSequenceId
     self:RefreshShieldState(true)
+    if (tonumber(value) or 0) > 0 and ShouldShowShieldPulse() then
+        local frame = self.bars and self.bars.health
+        self:PlayShieldPulse(frame)
+    end
 end
 
 function ResourceBars:OnShieldVisualUpdated(unitTag, visualType, statType, attributeType, powerType, oldValue, newValue, oldMaxValue, newMaxValue, sequenceId)
@@ -1103,6 +1403,10 @@ function ResourceBars:OnShieldVisualUpdated(unitTag, visualType, statType, attri
     self.shieldMax = math.max((self.shieldMax or 0) + ((tonumber(newMaxValue) or 0) - (tonumber(oldMaxValue) or 0)), 0)
     self.shieldSequenceId = sequenceId or self.shieldSequenceId
     self:RefreshShieldState(true)
+    if (tonumber(newValue) or 0) > (tonumber(oldValue) or 0) and ShouldShowShieldPulse() then
+        local frame = self.bars and self.bars.health
+        self:PlayShieldPulse(frame)
+    end
 end
 
 function ResourceBars:OnShieldVisualRemoved(unitTag, visualType, statType, attributeType, powerType, value, maxValue, sequenceId)
@@ -1194,6 +1498,9 @@ local function RegisterDebugCommands()
     SLASH_COMMANDS["/nsbars"] = function()
         ResourceBars:RefreshPowerValues(true)
         ResourceBars:ApplyLayout()
+    end
+    SLASH_COMMANDS["/nsbarsfeedback"] = function()
+        ResourceBars:PreviewFeedback()
     end
 end
 
