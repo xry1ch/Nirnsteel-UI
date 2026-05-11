@@ -16,6 +16,7 @@ local ACCOUNT_DEFAULTS =
             enabled = true,
             unlocked = false,
             soundsEnabled = true,
+            regularSoundKey = "TRIBUTE_AGENT_HEALED",
             filterExperience = false,
         },
         damageNumbers =
@@ -350,6 +351,10 @@ function Settings:SetLootHistorySoundsEnabled(value)
     self:GetLootHistory().soundsEnabled = value
 end
 
+function Settings:SetLootHistoryValue(key, value)
+    self:GetLootHistory()[key] = value
+end
+
 function Settings:SetLootHistoryFilterExperience(value)
     self:GetLootHistory().filterExperience = value
 end
@@ -441,6 +446,12 @@ end
 function Settings:PreviewKillSound()
     if Nirnsteel_UI.KillSound and Nirnsteel_UI.KillSound.PreviewSound then
         Nirnsteel_UI.KillSound:PreviewSound()
+    end
+end
+
+function Settings:PreviewLootHistoryRegularSound()
+    if Nirnsteel_UI.LootHistory and Nirnsteel_UI.LootHistory.PreviewRegularSound then
+        Nirnsteel_UI.LootHistory:PreviewRegularSound()
     end
 end
 
@@ -662,6 +673,32 @@ function Settings:RegisterAddonMenu()
                     setFunc = function(value) self:SetLootHistorySoundsEnabled(value) end,
                     disabled = function() return not self:IsLootHistoryEnabled() end,
                     default = ACCOUNT_DEFAULTS.modules.lootHistory.soundsEnabled,
+                },
+                {
+                    type = "dropdown",
+                    name = "Regular Loot Sound",
+                    tooltip = "Chooses the sound played for non-legendary loot.",
+                    choices =
+                    {
+                        "TRIBUTE_AGENT_HEALED",
+                        "STATS_RESPEC_CLEAR_ALL",
+                        "TRIBUTE_CARD_UNTARGETED",
+                        "VENGEANCE_PERK_DROP",
+                    },
+                    choicesValues =
+                    {
+                        "TRIBUTE_AGENT_HEALED",
+                        "STATS_RESPEC_CLEAR_ALL",
+                        "TRIBUTE_CARD_UNTARGETED",
+                        "VENGEANCE_PERK_DROP",
+                    },
+                    getFunc = function() return self:GetLootHistory().regularSoundKey end,
+                    setFunc = function(value)
+                        self:SetLootHistoryValue("regularSoundKey", value)
+                        self:PreviewLootHistoryRegularSound()
+                    end,
+                    disabled = function() return not self:IsLootHistoryEnabled() or not self:AreLootHistorySoundsEnabled() end,
+                    default = ACCOUNT_DEFAULTS.modules.lootHistory.regularSoundKey,
                 },
                 {
                     type = "checkbox",

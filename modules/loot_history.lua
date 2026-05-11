@@ -36,6 +36,14 @@ local lastLootSoundMS = -LOOT_SOUND_THROTTLE_MS
 local debugItemId = 900000
 local originalAddXpEntry
 
+local function GetConfiguredRegularLootSound()
+    local regularSoundKey = "TRIBUTE_AGENT_HEALED"
+    if Nirnsteel_UI.Settings and Nirnsteel_UI.Settings.GetLootHistory then
+        regularSoundKey = Nirnsteel_UI.Settings:GetLootHistory().regularSoundKey or regularSoundKey
+    end
+    return SOUNDS[regularSoundKey] or SOUNDS.TRIBUTE_AGENT_HEALED
+end
+
 local function IsLegendaryItemEntry(data)
     return data
         and data.entryType == LOOT_ENTRY_TYPE_ITEM
@@ -52,7 +60,7 @@ local function PlayLootFeedbackSound(data)
         if IsLegendaryItemEntry(data) then
             PlaySound(SOUNDS.ANTIQUITIES_FANFARE_COMPLETED)
         else
-            PlaySound(SOUNDS.TRIBUTE_AGENT_HEALED)
+            PlaySound(GetConfiguredRegularLootSound())
         end
         lastLootSoundMS = nowMS
     end
@@ -113,6 +121,10 @@ function LootHistory:DebugMixedItems()
         local item = DEBUG_ITEMS[math.random(#DEBUG_ITEMS)]
         AddDebugLootData(CreateDebugItemData(item.name, item.icon, item.quality, math.random(1, 3)))
     end
+end
+
+function LootHistory:PreviewRegularSound()
+    PlaySound(GetConfiguredRegularLootSound())
 end
 
 local function RegisterDebugCommands()
