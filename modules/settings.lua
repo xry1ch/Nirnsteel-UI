@@ -46,6 +46,7 @@ local ACCOUNT_DEFAULTS =
         actionBarFrames =
         {
             enabled = true,
+            skillUseShrinkEnabled = true,
         },
         compass =
         {
@@ -459,11 +460,19 @@ function Settings:IsActionBarFramesEnabled()
     return self:GetActionBarFrames().enabled
 end
 
+function Settings:IsActionBarSkillUseShrinkEnabled()
+    return self:GetActionBarFrames().skillUseShrinkEnabled
+end
+
 function Settings:SetActionBarFramesEnabled(value)
     self:GetActionBarFrames().enabled = value
     if Nirnsteel_UI.ActionBarFrames then
         Nirnsteel_UI.ActionBarFrames:RefreshSettings()
     end
+end
+
+function Settings:SetActionBarSkillUseShrinkEnabled(value)
+    self:GetActionBarFrames().skillUseShrinkEnabled = value
 end
 
 function Settings:IsCompassEnabled()
@@ -1009,8 +1018,8 @@ function Settings:RegisterAddonMenu()
         },
         {
             type = "submenu",
-            name = "Action Bar Frames",
-            tooltip = "Settings for Nirnsteel action bar slot frame textures.",
+            name = "Action Bar",
+            tooltip = "Settings for Nirnsteel action bar visuals and feedback.",
             controls =
             {
                 {
@@ -1020,6 +1029,15 @@ function Settings:RegisterAddonMenu()
                     getFunc = function() return self:IsActionBarFramesEnabled() end,
                     setFunc = function(value) self:SetActionBarFramesEnabled(value) end,
                     default = ACCOUNT_DEFAULTS.modules.actionBarFrames.enabled,
+                },
+                {
+                    type = "checkbox",
+                    name = "Shrink Used Skills",
+                    tooltip = "Briefly shrinks the action bar button when you use a slotted skill.",
+                    getFunc = function() return self:IsActionBarSkillUseShrinkEnabled() end,
+                    setFunc = function(value) self:SetActionBarSkillUseShrinkEnabled(value) end,
+                    disabled = function() return not self:IsActionBarFramesEnabled() end,
+                    default = ACCOUNT_DEFAULTS.modules.actionBarFrames.skillUseShrinkEnabled,
                 },
             },
         },

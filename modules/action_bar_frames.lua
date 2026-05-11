@@ -11,9 +11,16 @@ local TOGGLED_FRAME = "EsoUI/Art/ActionBar/actionslot_toggledon.dds"
 local STOCK_NORMAL_FRAME = "EsoUI/Art/ActionBar/abilityFrame64_up.dds"
 local STOCK_PRESSED_FRAME = "EsoUI/Art/ActionBar/abilityFrame64_down.dds"
 local NO_TEXTURE = ""
+local USE_SHRINK_SCALE = 0.86
+local USE_SHRINK_DURATION_MS = 75
+local USE_RESTORE_DURATION_MS = 90
 
 local function IsModuleEnabled()
     return not Nirnsteel_UI.Settings or Nirnsteel_UI.Settings:IsActionBarFramesEnabled()
+end
+
+local function IsUseShrinkEnabled()
+    return not Nirnsteel_UI.Settings or Nirnsteel_UI.Settings:IsActionBarSkillUseShrinkEnabled()
 end
 
 local function IsUltimateReady(button)
@@ -85,6 +92,58 @@ local function GetSetupPressedFrame(pressedFrame)
     end
 
     return pressedFrame
+end
+
+local function IsPlayableActionSlot(button)
+    if not button then
+        return false
+    end
+
+    local slotType = GetSlotType(button:GetSlot(), button:GetHotbarCategory())
+    return slotType == ACTION_TYPE_ABILITY or slotType == ACTION_TYPE_CRAFTED_ABILITY
+end
+
+local function CreateUseShrinkTimeline(control)
+    local timeline = ANIMATION_MANAGER:CreateTimeline()
+
+    local shrink = timeline:InsertAnimation(ANIMATION_SCALE, control, 0)
+    shrink:SetDuration(USE_SHRINK_DURATION_MS)
+    shrink:SetEasingFunction(ZO_EaseInQuadratic)
+
+    local restore = timeline:InsertAnimation(ANIMATION_SCALE, control, USE_SHRINK_DURATION_MS)
+    restore:SetDuration(USE_RESTORE_DURATION_MS)
+    restore:SetEasingFunction(ZO_EaseOutQuadratic)
+
+    return timeline
+end
+
+local function SetUseShrinkTimelineScale(timeline, control)
+    local baseScale = control:GetScale()
+    local shrinkScale = baseScale * USE_SHRINK_SCALE
+
+    local shrink = timeline:GetAnimation(1)
+    shrink:SetScaleValues(baseScale, shrinkScale)
+
+    local restore = timeline:GetAnimation(2)
+    restore:SetScaleValues(shrinkScale, baseScale)
+end
+
+function ActionBarFrames:PlayUseShrink(button)
+    if not IsModuleEnabled() or not IsUseShrinkEnabled() or IsInGamepadPreferredMode() or not IsPlayableActionSlot(button) then
+        return
+    end
+
+    if not button.NirnsteelUseShrinkTimeline then
+        button.NirnsteelUseShrinkTimeline = CreateUseShrinkTimeline(button.slot)
+    end
+
+    local timeline = button.NirnsteelUseShrinkTimeline
+    if timeline:IsPlaying() then
+        timeline:PlayInstantlyToEnd()
+    end
+
+    SetUseShrinkTimelineScale(timeline, button.slot)
+    timeline:PlayFromStart()
 end
 
 function ActionBarFrames:ApplyToButton(button)
@@ -246,6 +305,11 @@ function ActionBarFrames:RegisterEvents()
     end)
     EVENT_MANAGER:RegisterForEvent(EVENT_NAMESPACE, EVENT_ACTIVE_QUICKSLOT_CHANGED, function()
         self:ApplyQuickslot()
+    end)
+    EVENT_MANAGER:RegisterForEvent(EVENT_NAMESPACE, EVENT_ACTION_SLOT_ABILITY_USED, function(_, actionSlotIndex)
+        if ZO_ActionBar_GetButton then
+            self:PlayUseShrink(ZO_ActionBar_GetButton(actionSlotIndex))
+        end
     end)
     EVENT_MANAGER:RegisterForEvent(EVENT_NAMESPACE, EVENT_PLAYER_ACTIVATED, function()
         zo_callLater(function() self:ApplyAll() end, 1000)
