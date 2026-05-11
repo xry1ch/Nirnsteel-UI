@@ -14,6 +14,7 @@ local NO_TEXTURE = ""
 local USE_SHRINK_SCALE = 0.86
 local USE_SHRINK_DURATION_MS = 75
 local USE_RESTORE_DURATION_MS = 90
+local NO_LEADING_EDGE = false
 
 local function IsModuleEnabled()
     return not Nirnsteel_UI.Settings or Nirnsteel_UI.Settings:IsActionBarFramesEnabled()
@@ -21,6 +22,10 @@ end
 
 local function IsUseShrinkEnabled()
     return not Nirnsteel_UI.Settings or Nirnsteel_UI.Settings:IsActionBarSkillUseShrinkEnabled()
+end
+
+local function IsGlobalCooldownEnabled()
+    return Nirnsteel_UI.Settings and Nirnsteel_UI.Settings:IsActionBarGlobalCooldownEnabled()
 end
 
 local function IsUltimateReady(button)
@@ -146,6 +151,18 @@ function ActionBarFrames:PlayUseShrink(button)
     timeline:PlayFromStart()
 end
 
+function ActionBarFrames:ApplyGlobalCooldown(button)
+    if not IsModuleEnabled() or not IsGlobalCooldownEnabled() or not IsPlayableActionSlot(button) or not button.cooldown then
+        return
+    end
+
+    local remain, duration, global = GetSlotCooldownInfo(button:GetSlot(), button:GetHotbarCategory())
+    if global and remain and remain > 0 and duration and duration > 0 then
+        button.cooldown:StartCooldown(remain, duration, CD_TYPE_RADIAL, nil, NO_LEADING_EDGE)
+        button.cooldown:SetHidden(false)
+    end
+end
+
 function ActionBarFrames:ApplyToButton(button)
     if not button or not button.button then
         return
@@ -170,6 +187,8 @@ function ActionBarFrames:ApplyToButton(button)
             button.status:SetHidden(slotIsEmpty or IsSlotToggled(slotNum, hotbarCategory) == false)
         end
     end
+
+    self:ApplyGlobalCooldown(button)
 end
 
 function ActionBarFrames:ApplyQuickslot()
@@ -201,6 +220,29 @@ function ActionBarFrames:ApplyAll()
 
     self:ApplyQuickslot()
     self:ApplyCompanionUltimate()
+end
+
+function ActionBarFrames:RefreshCooldowns()
+    if not ZO_ActionBar_GetButton then
+        return
+    end
+
+    for i = ACTION_BAR_FIRST_NORMAL_SLOT_INDEX + 1, ACTION_BAR_ULTIMATE_SLOT_INDEX + 1 do
+        local button = ZO_ActionBar_GetButton(i)
+        if button and button.UpdateCooldown then
+            button:UpdateCooldown()
+        end
+    end
+
+    local quickslotButton = ZO_ActionBar_GetButton(nil, HOTBAR_CATEGORY_QUICKSLOT_WHEEL)
+    if quickslotButton and quickslotButton.UpdateCooldown then
+        quickslotButton:UpdateCooldown()
+    end
+
+    local companionUltimateButton = ZO_ActionBar_GetButton(ACTION_BAR_ULTIMATE_SLOT_INDEX + 1, HOTBAR_CATEGORY_COMPANION)
+    if companionUltimateButton and companionUltimateButton.UpdateCooldown then
+        companionUltimateButton:UpdateCooldown()
+    end
 end
 
 function ActionBarFrames:RefreshAssignableActionBars()
@@ -325,6 +367,7 @@ end
 function ActionBarFrames:RefreshSettings()
     self:RegisterEvents()
     self:ApplyAll()
+    self:RefreshCooldowns()
     self:RefreshAssignableActionBars()
 end
 

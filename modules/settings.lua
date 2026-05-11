@@ -47,6 +47,7 @@ local ACCOUNT_DEFAULTS =
         {
             enabled = true,
             skillUseShrinkEnabled = true,
+            globalCooldownEnabled = true,
         },
         compass =
         {
@@ -464,6 +465,10 @@ function Settings:IsActionBarSkillUseShrinkEnabled()
     return self:GetActionBarFrames().skillUseShrinkEnabled
 end
 
+function Settings:IsActionBarGlobalCooldownEnabled()
+    return self:GetActionBarFrames().globalCooldownEnabled
+end
+
 function Settings:SetActionBarFramesEnabled(value)
     self:GetActionBarFrames().enabled = value
     if Nirnsteel_UI.ActionBarFrames then
@@ -473,6 +478,13 @@ end
 
 function Settings:SetActionBarSkillUseShrinkEnabled(value)
     self:GetActionBarFrames().skillUseShrinkEnabled = value
+end
+
+function Settings:SetActionBarGlobalCooldownEnabled(value)
+    self:GetActionBarFrames().globalCooldownEnabled = value
+    if Nirnsteel_UI.ActionBarFrames then
+        Nirnsteel_UI.ActionBarFrames:RefreshSettings()
+    end
 end
 
 function Settings:IsCompassEnabled()
@@ -1038,6 +1050,15 @@ function Settings:RegisterAddonMenu()
                     setFunc = function(value) self:SetActionBarSkillUseShrinkEnabled(value) end,
                     disabled = function() return not self:IsActionBarFramesEnabled() end,
                     default = ACCOUNT_DEFAULTS.modules.actionBarFrames.skillUseShrinkEnabled,
+                },
+                {
+                    type = "checkbox",
+                    name = "Show Global Cooldown",
+                    tooltip = "Shows ESO's global cooldown overlay on skill buttons after using a slotted skill.",
+                    getFunc = function() return self:IsActionBarGlobalCooldownEnabled() end,
+                    setFunc = function(value) self:SetActionBarGlobalCooldownEnabled(value) end,
+                    disabled = function() return not self:IsActionBarFramesEnabled() end,
+                    default = ACCOUNT_DEFAULTS.modules.actionBarFrames.globalCooldownEnabled,
                 },
             },
         },
