@@ -626,9 +626,13 @@ function DamageNumbers:DebugCrit()
     self:ShowDamage(math.random(26000, 88000), true, "outgoing")
 end
 
-function DamageNumbers:DebugSound()
+function DamageNumbers:PreviewCriticalSound()
     lastCritSoundMS = -GetCritSoundThrottleMS()
     PlayCriticalSound()
+end
+
+function DamageNumbers:DebugSound()
+    self:PreviewCriticalSound()
 end
 
 function DamageNumbers:DebugStorm()

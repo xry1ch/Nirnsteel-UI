@@ -12,4 +12,5 @@ modules/resource_bars.lua
 modules/compass.lua
 modules/loot_history.lua
 modules/damage_numbers.lua
+modules/kill_sound.lua
 modules/action_bar_frames.lua

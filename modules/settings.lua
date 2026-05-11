@@ -37,6 +37,11 @@ local ACCOUNT_DEFAULTS =
             soundThrottleMS = 40,
             savedSctSettings = {},
         },
+        killSound =
+        {
+            enabled = true,
+            soundKey = "BATTLEGROUND_KILL_KILLING_BLOW",
+        },
         actionBarFrames =
         {
             enabled = true,
@@ -291,6 +296,10 @@ function Settings:GetDamageNumbersPosition()
     return self.server.modules.damageNumbers
 end
 
+function Settings:GetKillSound()
+    return self.account.modules.killSound
+end
+
 function Settings:GetActionBarFrames()
     return self.account.modules.actionBarFrames
 end
@@ -403,6 +412,36 @@ function Settings:SetDamageNumbersPosition(x, y)
     local position = self:GetDamageNumbersPosition()
     position.x = x
     position.y = y
+end
+
+function Settings:IsKillSoundEnabled()
+    return self:GetKillSound().enabled
+end
+
+function Settings:SetKillSoundEnabled(value)
+    self:GetKillSound().enabled = value
+    if Nirnsteel_UI.KillSound then
+        Nirnsteel_UI.KillSound:RefreshSettings()
+    end
+end
+
+function Settings:SetKillSoundValue(key, value)
+    self:GetKillSound()[key] = value
+    if Nirnsteel_UI.KillSound then
+        Nirnsteel_UI.KillSound:RefreshSettings()
+    end
+end
+
+function Settings:PreviewDamageNumberCritSound()
+    if Nirnsteel_UI.DamageNumbers and Nirnsteel_UI.DamageNumbers.PreviewCriticalSound then
+        Nirnsteel_UI.DamageNumbers:PreviewCriticalSound()
+    end
+end
+
+function Settings:PreviewKillSound()
+    if Nirnsteel_UI.KillSound and Nirnsteel_UI.KillSound.PreviewSound then
+        Nirnsteel_UI.KillSound:PreviewSound()
+    end
 end
 
 function Settings:IsActionBarFramesEnabled()
@@ -778,7 +817,10 @@ function Settings:RegisterAddonMenu()
 
                     },
                     getFunc = function() return self:GetDamageNumbers().critSoundKey end,
-                    setFunc = function(value) self:SetDamageNumberValue("critSoundKey", value) end,
+                    setFunc = function(value)
+                        self:SetDamageNumberValue("critSoundKey", value)
+                        self:PreviewDamageNumberCritSound()
+                    end,
                     disabled = function() return not self:IsDamageNumbersEnabled() or not self:AreDamageNumberCritSoundsEnabled() end,
                     default = ACCOUNT_DEFAULTS.modules.damageNumbers.critSoundKey,
                 },
@@ -877,6 +919,54 @@ function Settings:RegisterAddonMenu()
                     setFunc = function(value) self:SetDamageNumberValue("soundThrottleMS", value) end,
                     disabled = function() return not self:IsDamageNumbersEnabled() or not self:AreDamageNumberCritSoundsEnabled() end,
                     default = ACCOUNT_DEFAULTS.modules.damageNumbers.soundThrottleMS,
+                },
+            },
+        },
+        {
+            type = "submenu",
+            name = "Kill Sound",
+            tooltip = "Settings for the sound played when your character lands the killing blow.",
+            controls =
+            {
+                {
+                    type = "description",
+                    text = "Kill sound volume follows ESO audio settings (SFX/UI volume). ESO API PlaySound has no per-sound volume parameter.",
+                },
+                {
+                    type = "checkbox",
+                    name = "Enable Kill Sound Module",
+                    tooltip = "Plays a configurable sound when your character lands the killing blow.",
+                    getFunc = function() return self:IsKillSoundEnabled() end,
+                    setFunc = function(value) self:SetKillSoundEnabled(value) end,
+                    default = ACCOUNT_DEFAULTS.modules.killSound.enabled,
+                },
+                {
+                    type = "dropdown",
+                    name = "Killing Blow Sound",
+                    tooltip = "Chooses the sound played for your killing blows.",
+                    choices =
+                    {
+                        "BATTLEGROUND_KILL_KILLING_BLOW",
+                        "CODE_REDEMPTION_SUCCESS",
+                        "BATTLEGROUND_LEAVE_MATCH",
+                        "BATTLEGROUND_ROUND_RECAP_SCREEN_END",
+                        "SKILLS_SUBCLASSING_TRAIN"
+                    },
+                    choicesValues =
+                    {
+                        "BATTLEGROUND_KILL_KILLING_BLOW",
+                        "CODE_REDEMPTION_SUCCESS",
+                        "BATTLEGROUND_LEAVE_MATCH",
+                        "BATTLEGROUND_ROUND_RECAP_SCREEN_END",
+                        "SKILLS_SUBCLASSING_TRAIN"
+                    },
+                    getFunc = function() return self:GetKillSound().soundKey end,
+                    setFunc = function(value)
+                        self:SetKillSoundValue("soundKey", value)
+                        self:PreviewKillSound()
+                    end,
+                    disabled = function() return not self:IsKillSoundEnabled() end,
+                    default = ACCOUNT_DEFAULTS.modules.killSound.soundKey,
                 },
             },
         },
