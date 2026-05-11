@@ -59,8 +59,8 @@ local ACCOUNT_DEFAULTS =
             unlocked = false,
             scale = 100,
             opacity = 100,
-            width = 420,
-            height = 48,
+            width = 460,
+            height = 64,
             durationMS = 3600,
             intensity = 100,
             visibilityMode = "fade",
@@ -210,6 +210,21 @@ local function UpgradeDamageNumberDefaults(account)
     end
 end
 
+local function UpgradeExperienceTrackerDefaults(account)
+    local experienceTracker = account
+        and account.modules
+        and account.modules.experienceTracker
+
+    if not experienceTracker then
+        return
+    end
+
+    if experienceTracker.width == 420 and experienceTracker.height == 48 then
+        experienceTracker.width = ACCOUNT_DEFAULTS.modules.experienceTracker.width
+        experienceTracker.height = ACCOUNT_DEFAULTS.modules.experienceTracker.height
+    end
+end
+
 local function UpgradeResourceBarDefaults(account)
     local resourceBars = account
         and account.modules
@@ -293,6 +308,7 @@ function Settings:Initialize()
     self.account = ZO_SavedVars:NewAccountWide("NirnsteelUI_Account", SAVED_VARS_VERSION, nil, ACCOUNT_DEFAULTS)
     CopyDefaults(self.account, ACCOUNT_DEFAULTS)
     UpgradeDamageNumberDefaults(self.account)
+    UpgradeExperienceTrackerDefaults(self.account)
     UpgradeResourceBarDefaults(self.account)
     self.servers = ZO_SavedVars:NewAccountWide("NirnsteelUI_Servers", SAVED_VARS_VERSION, nil, SERVER_DEFAULTS)
     self.serverKey = GetServerKey()
@@ -1254,7 +1270,7 @@ function Settings:RegisterAddonMenu()
                     type = "slider",
                     name = "Width",
                     tooltip = "Controls the tracker bar width.",
-                    min = 260,
+                    min = 360,
                     max = 680,
                     step = 10,
                     getFunc = function() return self:GetExperienceTracker().width end,
@@ -1266,7 +1282,7 @@ function Settings:RegisterAddonMenu()
                     type = "slider",
                     name = "Height",
                     tooltip = "Controls the tracker height.",
-                    min = 34,
+                    min = 54,
                     max = 76,
                     step = 1,
                     getFunc = function() return self:GetExperienceTracker().height end,
