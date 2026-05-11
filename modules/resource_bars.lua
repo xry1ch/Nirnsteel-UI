@@ -9,11 +9,11 @@ local DEFAULT_SETTINGS =
 {
     enabled = true,
     unlocked = false,
-    scale = 100,
-    barHeight = 18,
-    rowSpacing = 0,
-    columnSpacing = 6,
-    rowHealthWidth = 280,
+    scale = 109,
+    barHeight = 25,
+    rowSpacing = 5,
+    columnSpacing = 8,
+    rowHealthWidth = 300,
     rowMagickaWidth = 270,
     rowStaminaWidth = 270,
     opacity = 100,
@@ -21,30 +21,30 @@ local DEFAULT_SETTINGS =
     healthTextFormat = "numberAndPercent",
     magickaTextFormat = "numberAndPercent",
     staminaTextFormat = "numberAndPercent",
-    healthTextPosition = "center",
-    magickaTextPosition = "center",
-    staminaTextPosition = "center",
+    healthTextPosition = "sides",
+    magickaTextPosition = "sides",
+    staminaTextPosition = "sides",
     shieldOverlayEnabled = true,
     shieldTextMode = "healthAndShield",
-    barTextureKey = "genericTall",
-    healthTextureKey = "genericTall",
-    magickaTextureKey = "genericTall",
-    staminaTextureKey = "genericTall",
-    barPatternEnabled = false,
-    barPatternKey = "smoke",
-    barPatternOpacity = 18,
-    barPatternScale = 96,
-    shieldTextureKey = "genericTall",
+    shieldFillOpacity = 70,
+    shieldFillColor = { r = 0.95, g = 0.60, b = 0.33 },
+    shieldGlowEnabled = true,
+    shieldGlowOpacity = 65,
+    shieldGlowColor = { r = 0.95, g = 0.66, b = 0.56 },
+    barPatternEnabled = true,
+    barPatternKey = "Molten",
+    barPatternOpacity = 6,
+    barPatternScale = 228,
     borderWidth = 0,
-    cornerSize = 0,
-    innerShadowAlpha = 20,
-    outerShadowAlpha = 0,
+    cornerSize = 2,
+    innerShadowAlpha = 60,
+    outerShadowAlpha = 100,
     textFontKey = "gameSmall",
-    textSize = 16,
-    textOutline = "soft-shadow-thick",
+    textSize = 18,
+    textOutline = "thick-outline",
     textOpacity = 100,
     textInset = 6,
-    textVerticalOffset = 2,
+    textVerticalOffset = 3,
     textColor = { r = 0.96, g = 0.92, b = 0.82 },
 }
 
@@ -89,6 +89,7 @@ local BAR_TEXTURES =
         coords = { 0, 1, 0, 1 },
     },
 }
+local DEFAULT_BAR_TEXTURE_INFO = BAR_TEXTURES.genericTall
 
 local FONT_FACES =
 {
@@ -104,8 +105,13 @@ local BAR_PATTERNS =
 {
     smoke = "/art/fx/texture/smokecombinetexture.dds",
     stillwater = "/art/maps/housing/stillwatersretreatext_base_0.dds",
-    Smoke = "/art/fx/texture/smokecombinetexture.dds",
-    Stillwater = "/art/maps/housing/stillwatersretreatext_base_0.dds",
+    ZigZag = "/esoui/art/miscellaneous/progressbar_texture_overlay.dds",
+    Stone = "/art/fx/texture/fxmaterial/stormatronach_rocktexture_d.dds",
+    Dirt = "/art/fx/texture/dirtprojection.dds",
+    Lava = "/art/fx/texture/fxmaterial/stoneskinlava_d.dds",
+    RockLava = "/art/fx/texture/modelfxtextures/mq6_rockwalldoorlava_n.dds",
+    LavaWave = "/art/fx/texture/fxmaterial/lavayellow_d.dds",
+    Molten = "/art/fx/texture/modelfxtextures/lava_005_d.dds",
 }
 
 local RESOURCE_DATA =
@@ -256,20 +262,12 @@ local function ShouldShowShieldOverlay()
     return GetSettingValue("shieldOverlayEnabled") ~= false
 end
 
+local function ShouldShowShieldGlow()
+    return GetSettingValue("shieldGlowEnabled") ~= false
+end
+
 local function ShouldShowBarPattern()
     return GetSettingValue("barPatternEnabled") == true
-end
-
-local function GetBarTextureInfo(settingKey, fallbackSettingKey)
-    local textureKey = GetSettingValue(settingKey)
-    if not BAR_TEXTURES[textureKey] and fallbackSettingKey then
-        textureKey = GetSettingValue(fallbackSettingKey)
-    end
-    return BAR_TEXTURES[textureKey] or BAR_TEXTURES.genericTall
-end
-
-local function GetResourceTextureInfo(resourceKey)
-    return GetBarTextureInfo(resourceKey .. "TextureKey", "barTextureKey")
 end
 
 local function BuildTextFont()
@@ -294,7 +292,7 @@ local function ApplyLabelTextStyle(label, font, r, g, b, alpha)
 end
 
 local function SetStatusBarTextures(bar, textureInfo)
-    textureInfo = textureInfo or GetBarTextureInfo("barTextureKey")
+    textureInfo = textureInfo or DEFAULT_BAR_TEXTURE_INFO
     bar:SetTexture(textureInfo.texture)
     bar:SetTextureCoords(unpack(textureInfo.coords))
     bar:EnableLeadingEdge(false)
@@ -302,7 +300,7 @@ local function SetStatusBarTextures(bar, textureInfo)
 end
 
 local function ConfigureStatusBar(bar, data, key)
-    SetStatusBarTextures(bar, GetResourceTextureInfo(key))
+    SetStatusBarTextures(bar, DEFAULT_BAR_TEXTURE_INFO)
     bar:SetGradientColors(data.color[1], data.color[2], data.color[3], data.color[4], data.endColor[1], data.endColor[2], data.endColor[3], data.endColor[4])
 end
 
@@ -380,16 +378,33 @@ local function ApplyFrameStyle(frame, width, height)
     frame.innerShadow:SetEdgeTexture(EDGE_FRAME_TEXTURE, 128, 16, math.max(cornerSize - borderWidth, 1), 0)
 
     frame.bar:SetAlpha(alpha)
-    SetStatusBarTextures(frame.bar, GetResourceTextureInfo(frame.powerKey))
+    SetStatusBarTextures(frame.bar, DEFAULT_BAR_TEXTURE_INFO)
     UpdatePatternTexture(frame)
 
     if frame.shieldBar then
-        SetStatusBarTextures(frame.shieldBar, GetBarTextureInfo("shieldTextureKey"))
+        SetStatusBarTextures(frame.shieldBar, DEFAULT_BAR_TEXTURE_INFO)
+        local shieldFillOpacity = ClampNumber(GetSettingValue("shieldFillOpacity"), 0, 100) / 100
+        local shieldFillColor = GetSettingValue("shieldFillColor") or DEFAULT_SETTINGS.shieldFillColor
+        local shieldFillR = tonumber(shieldFillColor.r) or DEFAULT_SETTINGS.shieldFillColor.r
+        local shieldFillG = tonumber(shieldFillColor.g) or DEFAULT_SETTINGS.shieldFillColor.g
+        local shieldFillB = tonumber(shieldFillColor.b) or DEFAULT_SETTINGS.shieldFillColor.b
+        frame.shieldBar:SetColor(shieldFillR, shieldFillG, shieldFillB, shieldFillOpacity)
         frame.shieldBar:SetAlpha(alpha)
     end
 
+    if frame.shieldGlow then
+        local shieldGlowOpacity = ClampNumber(GetSettingValue("shieldGlowOpacity"), 0, 100) / 100
+        local shieldGlowColor = GetSettingValue("shieldGlowColor") or DEFAULT_SETTINGS.shieldGlowColor
+        local shieldGlowR = tonumber(shieldGlowColor.r) or DEFAULT_SETTINGS.shieldGlowColor.r
+        local shieldGlowG = tonumber(shieldGlowColor.g) or DEFAULT_SETTINGS.shieldGlowColor.g
+        local shieldGlowB = tonumber(shieldGlowColor.b) or DEFAULT_SETTINGS.shieldGlowColor.b
+        frame.shieldGlow:SetColor(shieldGlowR, shieldGlowG, shieldGlowB, shieldGlowOpacity)
+        frame.shieldGlow:SetAlpha(alpha)
+        frame.shieldGlow:SetHidden(not ShouldShowShieldGlow())
+    end
+
     if frame.gloss then
-        local textureInfo = GetResourceTextureInfo(frame.powerKey)
+        local textureInfo = DEFAULT_BAR_TEXTURE_INFO
         frame.gloss:SetTexture(textureInfo.gloss)
         frame.gloss:SetTextureCoords(unpack(textureInfo.coords))
         frame.gloss:SetHidden(not ShouldShowGloss())
@@ -489,7 +504,7 @@ end
 local function CreateGloss(parent, resourceKey)
     local gloss = WINDOW_MANAGER:CreateControl(nil, parent, CT_STATUSBAR)
     gloss:SetAnchorFill(parent)
-    local textureInfo = GetResourceTextureInfo(resourceKey)
+    local textureInfo = DEFAULT_BAR_TEXTURE_INFO
     gloss:SetTexture(textureInfo.gloss)
     gloss:SetTextureCoords(unpack(textureInfo.coords))
     gloss:EnableLeadingEdge(false)
@@ -525,12 +540,22 @@ function ResourceBars:CreateResourceBar(key, data)
 
     if key == "health" then
         frame.shieldBar = WINDOW_MANAGER:CreateControl(nil, frame.track, CT_STATUSBAR)
-        SetStatusBarTextures(frame.shieldBar, GetBarTextureInfo("shieldTextureKey"))
-        frame.shieldBar:SetColor(0.62, 0.84, 1.0, 0.34)
+        SetStatusBarTextures(frame.shieldBar, DEFAULT_BAR_TEXTURE_INFO)
         frame.shieldBar:EnableLeadingEdge(false)
         frame.shieldBar:SetMinMax(0, 1)
         frame.shieldBar:SetValue(1)
         frame.shieldBar:SetDrawLayer(DL_OVERLAY)
+
+        frame.shieldGlow = WINDOW_MANAGER:CreateControl(nil, frame.track, CT_STATUSBAR)
+        frame.shieldGlow:SetAnchorFill(frame.track)
+        frame.shieldGlow:SetTexture(DEFAULT_BAR_TEXTURE_INFO.gloss)
+        frame.shieldGlow:SetTextureCoords(unpack(DEFAULT_BAR_TEXTURE_INFO.coords))
+        frame.shieldGlow:EnableLeadingEdge(false)
+        frame.shieldGlow:SetMinMax(0, 1)
+        frame.shieldGlow:SetValue(1)
+        frame.shieldGlow:SetDrawLayer(DL_OVERLAY)
+        frame.shieldGlow:SetDrawLevel(2)
+        frame.shieldGlow:SetHidden(true)
     end
 
     frame.gloss = CreateGloss(frame.bar, key)
@@ -965,6 +990,9 @@ function ResourceBars:UpdateHealthShieldOverlay(_healthCurrent, healthMax)
 
     if not ShouldShowShieldOverlay() then
         frame.shieldBar:SetHidden(true)
+        if frame.shieldGlow then
+            frame.shieldGlow:SetHidden(true)
+        end
         return
     end
 
@@ -972,6 +1000,9 @@ function ResourceBars:UpdateHealthShieldOverlay(_healthCurrent, healthMax)
     local maxHealth = tonumber(healthMax) or 0
     local shieldRatio = maxHealth > 0 and zo_clamp(shield / maxHealth, 0, 1) or 0
     frame.shieldBar:SetHidden(shieldRatio <= 0)
+    if frame.shieldGlow then
+        frame.shieldGlow:SetHidden(shieldRatio <= 0 or not ShouldShowShieldGlow())
+    end
     if shieldRatio <= 0 then
         return
     end
@@ -983,6 +1014,11 @@ function ResourceBars:UpdateHealthShieldOverlay(_healthCurrent, healthMax)
     frame.shieldBar:ClearAnchors()
     frame.shieldBar:SetAnchor(CENTER, frame.track, CENTER, 0, 0)
     frame.shieldBar:SetDimensions(shieldWidth, trackHeight)
+    if frame.shieldGlow then
+        frame.shieldGlow:ClearAnchors()
+        frame.shieldGlow:SetAnchor(CENTER, frame.track, CENTER, 0, 0)
+        frame.shieldGlow:SetDimensions(shieldWidth, trackHeight)
+    end
 end
 
 function ResourceBars:UpdateResource(key, current, maximum, effectiveMax, instant)

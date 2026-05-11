@@ -48,11 +48,11 @@ local ACCOUNT_DEFAULTS =
         {
             enabled = true,
             unlocked = false,
-            scale = 100,
-            barHeight = 18,
-            rowSpacing = 0,
-            columnSpacing = 6,
-            rowHealthWidth = 280,
+            scale = 109,
+            barHeight = 25,
+            rowSpacing = 5,
+            columnSpacing = 8,
+            rowHealthWidth = 300,
             rowMagickaWidth = 270,
             rowStaminaWidth = 270,
             opacity = 100,
@@ -60,30 +60,30 @@ local ACCOUNT_DEFAULTS =
             healthTextFormat = "numberAndPercent",
             magickaTextFormat = "numberAndPercent",
             staminaTextFormat = "numberAndPercent",
-            healthTextPosition = "center",
-            magickaTextPosition = "center",
-            staminaTextPosition = "center",
+            healthTextPosition = "sides",
+            magickaTextPosition = "sides",
+            staminaTextPosition = "sides",
             shieldOverlayEnabled = true,
             shieldTextMode = "healthAndShield",
-            barTextureKey = "genericTall",
-            healthTextureKey = "genericTall",
-            magickaTextureKey = "genericTall",
-            staminaTextureKey = "genericTall",
-            barPatternEnabled = false,
-            barPatternKey = "smoke",
-            barPatternOpacity = 18,
-            barPatternScale = 96,
-            shieldTextureKey = "genericTall",
+            shieldFillOpacity = 70,
+            shieldFillColor = { r = 0.95, g = 0.60, b = 0.33 },
+            shieldGlowEnabled = true,
+            shieldGlowOpacity = 65,
+            shieldGlowColor = { r = 0.95, g = 0.66, b = 0.56 },
+            barPatternEnabled = true,
+            barPatternKey = "Molten",
+            barPatternOpacity = 6,
+            barPatternScale = 228,
             borderWidth = 0,
-            cornerSize = 0,
-            innerShadowAlpha = 20,
-            outerShadowAlpha = 0,
+            cornerSize = 2,
+            innerShadowAlpha = 60,
+            outerShadowAlpha = 100,
             textFontKey = "gameSmall",
-            textSize = 16,
-            textOutline = "soft-shadow-thick",
+            textSize = 18,
+            textOutline = "thick-outline",
             textOpacity = 100,
             textInset = 6,
-            textVerticalOffset = 2,
+            textVerticalOffset = 3,
             textColor = { r = 0.96, g = 0.92, b = 0.82 },
         },
     },
@@ -201,10 +201,6 @@ local function UpgradeResourceBarDefaults(account)
     resourceBars.width = nil
     resourceBars.healthChaseSpeed = nil
 
-    resourceBars.healthTextureKey = resourceBars.healthTextureKey or resourceBars.barTextureKey or ACCOUNT_DEFAULTS.modules.resourceBars.healthTextureKey
-    resourceBars.magickaTextureKey = resourceBars.magickaTextureKey or resourceBars.barTextureKey or ACCOUNT_DEFAULTS.modules.resourceBars.magickaTextureKey
-    resourceBars.staminaTextureKey = resourceBars.staminaTextureKey or resourceBars.barTextureKey or ACCOUNT_DEFAULTS.modules.resourceBars.staminaTextureKey
-
     local textFormatAliases =
     {
         Number = "number",
@@ -237,6 +233,7 @@ local function UpgradeResourceBarDefaults(account)
         None = "none",
         ["Soft Thin"] = "soft-shadow-thin",
         ["Soft Thick"] = "soft-shadow-thick",
+        ["Thick Outline"] = "thick-outline",
     }
     local patternAliases =
     {
@@ -477,6 +474,7 @@ function Settings:SetResourceBarsValue(key, value)
         None = "none",
         ["Soft Thin"] = "soft-shadow-thin",
         ["Soft Thick"] = "soft-shadow-thick",
+        ["Thick Outline"] = "thick-outline",
     }
     local patternAliases =
     {
@@ -1015,56 +1013,6 @@ function Settings:RegisterAddonMenu()
                     default = ACCOUNT_DEFAULTS.modules.resourceBars.glossEnabled,
                 },
                 {
-                    type = "dropdown",
-                    name = "All Bar Textures",
-                    tooltip = "Applies one fill texture to health, magicka, and stamina.",
-                    choices = { "Generic Tall", "Generic Arrow", "Gamepad Medium", "Gamepad Large", "Tribute Large" },
-                    choicesValues = { "genericTall", "genericArrow", "gamepadMedium", "gamepadLarge", "tributeLarge" },
-                    getFunc = function() return self:GetResourceBars().barTextureKey end,
-                    setFunc = function(value)
-                        local resourceBars = self:GetResourceBars()
-                        resourceBars.barTextureKey = value
-                        resourceBars.healthTextureKey = value
-                        resourceBars.magickaTextureKey = value
-                        resourceBars.staminaTextureKey = value
-                        if Nirnsteel_UI.ResourceBars then
-                            Nirnsteel_UI.ResourceBars:RefreshSettings()
-                        end
-                    end,
-                    disabled = function() return not self:IsResourceBarsEnabled() end,
-                    default = ACCOUNT_DEFAULTS.modules.resourceBars.barTextureKey,
-                },
-                {
-                    type = "dropdown",
-                    name = "Health Texture",
-                    choices = { "Generic Tall", "Generic Arrow", "Gamepad Medium", "Gamepad Large", "Tribute Large" },
-                    choicesValues = { "genericTall", "genericArrow", "gamepadMedium", "gamepadLarge", "tributeLarge" },
-                    getFunc = function() return self:GetResourceBars().healthTextureKey end,
-                    setFunc = function(value) self:SetResourceBarsValue("healthTextureKey", value) end,
-                    disabled = function() return not self:IsResourceBarsEnabled() end,
-                    default = ACCOUNT_DEFAULTS.modules.resourceBars.healthTextureKey,
-                },
-                {
-                    type = "dropdown",
-                    name = "Magicka Texture",
-                    choices = { "Generic Tall", "Generic Arrow", "Gamepad Medium", "Gamepad Large", "Tribute Large" },
-                    choicesValues = { "genericTall", "genericArrow", "gamepadMedium", "gamepadLarge", "tributeLarge" },
-                    getFunc = function() return self:GetResourceBars().magickaTextureKey end,
-                    setFunc = function(value) self:SetResourceBarsValue("magickaTextureKey", value) end,
-                    disabled = function() return not self:IsResourceBarsEnabled() end,
-                    default = ACCOUNT_DEFAULTS.modules.resourceBars.magickaTextureKey,
-                },
-                {
-                    type = "dropdown",
-                    name = "Stamina Texture",
-                    choices = { "Generic Tall", "Generic Arrow", "Gamepad Medium", "Gamepad Large", "Tribute Large" },
-                    choicesValues = { "genericTall", "genericArrow", "gamepadMedium", "gamepadLarge", "tributeLarge" },
-                    getFunc = function() return self:GetResourceBars().staminaTextureKey end,
-                    setFunc = function(value) self:SetResourceBarsValue("staminaTextureKey", value) end,
-                    disabled = function() return not self:IsResourceBarsEnabled() end,
-                    default = ACCOUNT_DEFAULTS.modules.resourceBars.staminaTextureKey,
-                },
-                {
                     type = "checkbox",
                     name = "Fill Pattern Overlay",
                     tooltip = "Adds a low-opacity texture over the colored fill. The resource color is preserved.",
@@ -1077,7 +1025,7 @@ function Settings:RegisterAddonMenu()
                     type = "dropdown",
                     name = "Fill Pattern",
                     tooltip = "Pattern texture layered over the bar color.",
-                    choices = { "Smoke", "Stillwater" },
+                    choices = { "Smoke", "Stillwater", "ZigZag", "Stone", "Dirt", "Lava", "RockLava", "LavaWave", "Molten" },
                     choicesValues = { "smoke", "stillwater" },
                     getFunc = function() return self:GetResourceBars().barPatternKey end,
                     setFunc = function(value) self:SetResourceBarsValue("barPatternKey", value) end,
@@ -1100,8 +1048,8 @@ function Settings:RegisterAddonMenu()
                     type = "slider",
                     name = "Fill Pattern Scale",
                     tooltip = "Lower values repeat the pattern more often; higher values make it larger.",
-                    min = 24,
-                    max = 256,
+                    min = 128,
+                    max = 512,
                     step = 4,
                     getFunc = function() return self:GetResourceBars().barPatternScale end,
                     setFunc = function(value) self:SetResourceBarsValue("barPatternScale", value) end,
@@ -1184,8 +1132,8 @@ function Settings:RegisterAddonMenu()
                 {
                     type = "dropdown",
                     name = "Text Outline",
-                    choices = { "None", "Soft Thin", "Soft Thick" },
-                    choicesValues = { "none", "soft-shadow-thin", "soft-shadow-thick" },
+                    choices = { "None", "Soft Thin", "Soft Thick", "Thick Outline" },
+                    choicesValues = { "none", "soft-shadow-thin", "soft-shadow-thick", "thick-outline" },
                     getFunc = function() return self:GetResourceBars().textOutline end,
                     setFunc = function(value) self:SetResourceBarsValue("textOutline", value) end,
                     disabled = function() return not self:IsResourceBarsEnabled() end,
@@ -1322,15 +1270,91 @@ function Settings:RegisterAddonMenu()
                     default = ACCOUNT_DEFAULTS.modules.resourceBars.shieldOverlayEnabled,
                 },
                 {
-                    type = "dropdown",
-                    name = "Shield Texture",
-                    tooltip = "Texture used by the shield overlay.",
-                    choices = { "Generic Tall", "Generic Arrow", "Gamepad Medium", "Gamepad Large", "Tribute Large" },
-                    choicesValues = { "genericTall", "genericArrow", "gamepadMedium", "gamepadLarge", "tributeLarge" },
-                    getFunc = function() return self:GetResourceBars().shieldTextureKey end,
-                    setFunc = function(value) self:SetResourceBarsValue("shieldTextureKey", value) end,
+                    type = "slider",
+                    name = "Shield Fill Opacity",
+                    tooltip = "Opacity of the shield fill overlay.",
+                    min = 0,
+                    max = 100,
+                    step = 1,
+                    getFunc = function() return self:GetResourceBars().shieldFillOpacity end,
+                    setFunc = function(value) self:SetResourceBarsValue("shieldFillOpacity", value) end,
                     disabled = function() return not self:IsResourceBarsEnabled() or not self:GetResourceBars().shieldOverlayEnabled end,
-                    default = ACCOUNT_DEFAULTS.modules.resourceBars.shieldTextureKey,
+                    default = ACCOUNT_DEFAULTS.modules.resourceBars.shieldFillOpacity,
+                },
+                {
+                    type = "colorpicker",
+                    name = "Shield Fill Color",
+                    tooltip = "Color tint of the shield fill.",
+                    getFunc = function()
+                        local color = self:GetResourceBars().shieldFillColor
+                        return color.r, color.g, color.b, 1
+                    end,
+                    setFunc = function(r, g, b)
+                        local color = self:GetResourceBars().shieldFillColor
+                        color.r = r
+                        color.g = g
+                        color.b = b
+                        if Nirnsteel_UI.ResourceBars then
+                            Nirnsteel_UI.ResourceBars:RefreshSettings()
+                        end
+                    end,
+                    disabled = function() return not self:IsResourceBarsEnabled() or not self:GetResourceBars().shieldOverlayEnabled end,
+                    default = function()
+                        local color = ACCOUNT_DEFAULTS.modules.resourceBars.shieldFillColor
+                        return color.r, color.g, color.b, 1
+                    end,
+                },
+                {
+                    type = "checkbox",
+                    name = "Shield Glow",
+                    tooltip = "Shows a gloss/glow layer over the shield fill.",
+                    getFunc = function() return self:GetResourceBars().shieldGlowEnabled end,
+                    setFunc = function(value) self:SetResourceBarsValue("shieldGlowEnabled", value) end,
+                    disabled = function() return not self:IsResourceBarsEnabled() or not self:GetResourceBars().shieldOverlayEnabled end,
+                    default = ACCOUNT_DEFAULTS.modules.resourceBars.shieldGlowEnabled,
+                },
+                {
+                    type = "slider",
+                    name = "Shield Glow Opacity",
+                    tooltip = "Opacity of the shield glow layer.",
+                    min = 0,
+                    max = 100,
+                    step = 1,
+                    getFunc = function() return self:GetResourceBars().shieldGlowOpacity end,
+                    setFunc = function(value) self:SetResourceBarsValue("shieldGlowOpacity", value) end,
+                    disabled = function()
+                        return not self:IsResourceBarsEnabled()
+                            or not self:GetResourceBars().shieldOverlayEnabled
+                            or not self:GetResourceBars().shieldGlowEnabled
+                    end,
+                    default = ACCOUNT_DEFAULTS.modules.resourceBars.shieldGlowOpacity,
+                },
+                {
+                    type = "colorpicker",
+                    name = "Shield Glow Color",
+                    tooltip = "Color tint of the shield glow.",
+                    getFunc = function()
+                        local color = self:GetResourceBars().shieldGlowColor
+                        return color.r, color.g, color.b, 1
+                    end,
+                    setFunc = function(r, g, b)
+                        local color = self:GetResourceBars().shieldGlowColor
+                        color.r = r
+                        color.g = g
+                        color.b = b
+                        if Nirnsteel_UI.ResourceBars then
+                            Nirnsteel_UI.ResourceBars:RefreshSettings()
+                        end
+                    end,
+                    disabled = function()
+                        return not self:IsResourceBarsEnabled()
+                            or not self:GetResourceBars().shieldOverlayEnabled
+                            or not self:GetResourceBars().shieldGlowEnabled
+                    end,
+                    default = function()
+                        local color = ACCOUNT_DEFAULTS.modules.resourceBars.shieldGlowColor
+                        return color.r, color.g, color.b, 1
+                    end,
                 },
                 {
                     type = "dropdown",
