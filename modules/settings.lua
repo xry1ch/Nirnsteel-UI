@@ -53,6 +53,21 @@ local ACCOUNT_DEFAULTS =
         {
             enabled = true,
         },
+        experienceTracker =
+        {
+            enabled = true,
+            unlocked = false,
+            scale = 100,
+            opacity = 100,
+            width = 420,
+            height = 48,
+            durationMS = 3600,
+            intensity = 100,
+            visibilityMode = "fade",
+            chunkSoundKey = "PROMOTIONAL_EVENT_REWARD_TO_CLAIM_PROMPT",
+            showGainText = true,
+            hideStockProgressBar = true,
+        },
         resourceBars =
         {
             enabled = true,
@@ -122,6 +137,11 @@ local SERVER_DEFAULTS =
                 {
                     x = 0,
                     y = -45,
+                },
+                experienceTracker =
+                {
+                    x = 30,
+                    y = 30,
                 },
                 resourceBars =
                 {
@@ -311,6 +331,14 @@ function Settings:GetCompass()
     return self.account.modules.compass
 end
 
+function Settings:GetExperienceTracker()
+    return self.account.modules.experienceTracker
+end
+
+function Settings:GetExperienceTrackerPosition()
+    return self.server.modules.experienceTracker
+end
+
 function Settings:GetResourceBars()
     return self.account.modules.resourceBars
 end
@@ -495,6 +523,51 @@ function Settings:SetCompassEnabled(value)
     self:GetCompass().enabled = value
     if Nirnsteel_UI.Compass then
         Nirnsteel_UI.Compass:RefreshSettings()
+    end
+end
+
+function Settings:IsExperienceTrackerEnabled()
+    return self:GetExperienceTracker().enabled
+end
+
+function Settings:IsExperienceTrackerUnlocked()
+    return self:GetExperienceTracker().unlocked
+end
+
+function Settings:ShouldExperienceTrackerHideStockProgressBar()
+    return self:GetExperienceTracker().hideStockProgressBar
+end
+
+function Settings:SetExperienceTrackerEnabled(value)
+    self:GetExperienceTracker().enabled = value
+    if Nirnsteel_UI.ExperienceTracker then
+        Nirnsteel_UI.ExperienceTracker:RefreshSettings()
+    end
+end
+
+function Settings:SetExperienceTrackerUnlocked(value)
+    self:GetExperienceTracker().unlocked = value
+    if Nirnsteel_UI.ExperienceTracker then
+        Nirnsteel_UI.ExperienceTracker:RefreshSettings()
+    end
+end
+
+function Settings:SetExperienceTrackerValue(key, value)
+    self:GetExperienceTracker()[key] = value
+    if Nirnsteel_UI.ExperienceTracker then
+        Nirnsteel_UI.ExperienceTracker:RefreshSettings()
+    end
+end
+
+function Settings:SetExperienceTrackerPosition(x, y)
+    local position = self:GetExperienceTrackerPosition()
+    position.x = x
+    position.y = y
+end
+
+function Settings:PreviewExperienceTracker()
+    if Nirnsteel_UI.ExperienceTracker and Nirnsteel_UI.ExperienceTracker.PreviewGain then
+        Nirnsteel_UI.ExperienceTracker:PreviewGain()
     end
 end
 
@@ -1075,6 +1148,162 @@ function Settings:RegisterAddonMenu()
                     getFunc = function() return self:IsCompassEnabled() end,
                     setFunc = function(value) self:SetCompassEnabled(value) end,
                     default = ACCOUNT_DEFAULTS.modules.compass.enabled,
+                },
+            },
+        },
+        {
+            type = "submenu",
+            name = "Experience Tracker",
+            tooltip = "Settings for the custom HUD XP and Champion Point gain tracker.",
+            controls =
+            {
+                {
+                    type = "checkbox",
+                    name = "Enable Experience Tracker",
+                    tooltip = "Shows a custom Nirnsteel XP or Champion Point gain animation on the HUD.",
+                    getFunc = function() return self:IsExperienceTrackerEnabled() end,
+                    setFunc = function(value) self:SetExperienceTrackerEnabled(value) end,
+                    default = ACCOUNT_DEFAULTS.modules.experienceTracker.enabled,
+                },
+                {
+                    type = "checkbox",
+                    name = "Unlock Experience Tracker",
+                    tooltip = "Shows a draggable handle for positioning the tracker. Position is saved per server.",
+                    getFunc = function() return self:IsExperienceTrackerUnlocked() end,
+                    setFunc = function(value) self:SetExperienceTrackerUnlocked(value) end,
+                    disabled = function() return not self:IsExperienceTrackerEnabled() end,
+                    default = ACCOUNT_DEFAULTS.modules.experienceTracker.unlocked,
+                },
+                {
+                    type = "checkbox",
+                    name = "Hide Stock Progress Bar",
+                    tooltip = "Suppresses ESO's default HUD XP progress bar while the custom tracker is enabled.",
+                    getFunc = function() return self:ShouldExperienceTrackerHideStockProgressBar() end,
+                    setFunc = function(value) self:SetExperienceTrackerValue("hideStockProgressBar", value) end,
+                    disabled = function() return not self:IsExperienceTrackerEnabled() end,
+                    default = ACCOUNT_DEFAULTS.modules.experienceTracker.hideStockProgressBar,
+                },
+                {
+                    type = "checkbox",
+                    name = "Show Gained XP Text",
+                    tooltip = "Shows the gained XP amount during the tracker animation.",
+                    getFunc = function() return self:GetExperienceTracker().showGainText end,
+                    setFunc = function(value) self:SetExperienceTrackerValue("showGainText", value) end,
+                    disabled = function() return not self:IsExperienceTrackerEnabled() end,
+                    default = ACCOUNT_DEFAULTS.modules.experienceTracker.showGainText,
+                },
+                {
+                    type = "dropdown",
+                    name = "Visibility",
+                    tooltip = "Chooses whether the tracker fades after XP gains or stays visible on the HUD.",
+                    choices = { "Fade After Gains", "Always Visible" },
+                    choicesValues = { "fade", "always" },
+                    getFunc = function() return self:GetExperienceTracker().visibilityMode end,
+                    setFunc = function(value) self:SetExperienceTrackerValue("visibilityMode", value) end,
+                    disabled = function() return not self:IsExperienceTrackerEnabled() end,
+                    default = ACCOUNT_DEFAULTS.modules.experienceTracker.visibilityMode,
+                },
+                {
+                    type = "dropdown",
+                    name = "Chunk Sound",
+                    tooltip = "Chooses the sound played for each XP fill chunk.",
+                    choices =
+                    {
+                        "None",
+                        "Outfit Weapon Type Rune",
+                        "Promotional Event Reward To Claim",
+                        "Endless Dungeon Counter Down",
+                    },
+                    choicesValues =
+                    {
+                        "none",
+                        "OUTFIT_WEAPON_TYPE_RUNE",
+                        "PROMOTIONAL_EVENT_REWARD_TO_CLAIM_PROMPT",
+                        "ENDLESS_DUNGEON_COUNTER_DOWN",
+                    },
+                    getFunc = function() return self:GetExperienceTracker().chunkSoundKey end,
+                    setFunc = function(value) self:SetExperienceTrackerValue("chunkSoundKey", value) end,
+                    disabled = function() return not self:IsExperienceTrackerEnabled() end,
+                    default = ACCOUNT_DEFAULTS.modules.experienceTracker.chunkSoundKey,
+                },
+                {
+                    type = "slider",
+                    name = "Scale",
+                    tooltip = "Controls the overall size of the experience tracker.",
+                    min = 70,
+                    max = 160,
+                    step = 1,
+                    getFunc = function() return self:GetExperienceTracker().scale end,
+                    setFunc = function(value) self:SetExperienceTrackerValue("scale", value) end,
+                    disabled = function() return not self:IsExperienceTrackerEnabled() end,
+                    default = ACCOUNT_DEFAULTS.modules.experienceTracker.scale,
+                },
+                {
+                    type = "slider",
+                    name = "Opacity",
+                    tooltip = "Controls the opacity of the tracker while visible.",
+                    min = 20,
+                    max = 100,
+                    step = 1,
+                    getFunc = function() return self:GetExperienceTracker().opacity end,
+                    setFunc = function(value) self:SetExperienceTrackerValue("opacity", value) end,
+                    disabled = function() return not self:IsExperienceTrackerEnabled() end,
+                    default = ACCOUNT_DEFAULTS.modules.experienceTracker.opacity,
+                },
+                {
+                    type = "slider",
+                    name = "Width",
+                    tooltip = "Controls the tracker bar width.",
+                    min = 260,
+                    max = 680,
+                    step = 10,
+                    getFunc = function() return self:GetExperienceTracker().width end,
+                    setFunc = function(value) self:SetExperienceTrackerValue("width", value) end,
+                    disabled = function() return not self:IsExperienceTrackerEnabled() end,
+                    default = ACCOUNT_DEFAULTS.modules.experienceTracker.width,
+                },
+                {
+                    type = "slider",
+                    name = "Height",
+                    tooltip = "Controls the tracker height.",
+                    min = 34,
+                    max = 76,
+                    step = 1,
+                    getFunc = function() return self:GetExperienceTracker().height end,
+                    setFunc = function(value) self:SetExperienceTrackerValue("height", value) end,
+                    disabled = function() return not self:IsExperienceTrackerEnabled() end,
+                    default = ACCOUNT_DEFAULTS.modules.experienceTracker.height,
+                },
+                {
+                    type = "slider",
+                    name = "Visible Duration",
+                    tooltip = "Milliseconds the tracker remains visible after a gain animation starts.",
+                    min = 1800,
+                    max = 7000,
+                    step = 100,
+                    getFunc = function() return self:GetExperienceTracker().durationMS end,
+                    setFunc = function(value) self:SetExperienceTrackerValue("durationMS", value) end,
+                    disabled = function() return not self:IsExperienceTrackerEnabled() end,
+                    default = ACCOUNT_DEFAULTS.modules.experienceTracker.durationMS,
+                },
+                {
+                    type = "slider",
+                    name = "Feedback Intensity",
+                    tooltip = "Controls glow, flash, and bulk-fill strength.",
+                    min = 0,
+                    max = 140,
+                    step = 5,
+                    getFunc = function() return self:GetExperienceTracker().intensity end,
+                    setFunc = function(value) self:SetExperienceTrackerValue("intensity", value) end,
+                    disabled = function() return not self:IsExperienceTrackerEnabled() end,
+                    default = ACCOUNT_DEFAULTS.modules.experienceTracker.intensity,
+                },
+                {
+                    type = "button",
+                    name = "Preview",
+                    tooltip = "Plays a sample experience gain animation.",
+                    func = function() self:PreviewExperienceTracker() end,
+                    disabled = function() return not self:IsExperienceTrackerEnabled() end,
                 },
             },
         },
