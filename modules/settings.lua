@@ -131,6 +131,18 @@ local ACCOUNT_DEFAULTS =
             skillUseShrinkEnabled = true,
             globalCooldownEnabled = true,
         },
+        castBar =
+        {
+            enabled = true,
+            unlocked = false,
+            scale = 100,
+            width = 400,
+            height = 20,
+            opacity = 100,
+            textMode = "nameAndTime",
+            showIcon = true,
+            animationIntensity = 85,
+        },
         compass =
         {
             enabled = true,
@@ -235,6 +247,11 @@ local SERVER_DEFAULTS =
                 {
                     x = 0,
                     y = -120,
+                },
+                castBar =
+                {
+                    x = 0,
+                    y = -180,
                 },
             },
         },
@@ -392,12 +409,42 @@ local function UpgradeResourceBarDefaults(account)
     resourceBars.barPatternKey = patternAliases[resourceBars.barPatternKey] or resourceBars.barPatternKey or ACCOUNT_DEFAULTS.modules.resourceBars.barPatternKey
 end
 
+local function UpgradeCastBarDefaults(account)
+    local castBar = account
+        and account.modules
+        and account.modules.castBar
+
+    if not castBar then
+        return
+    end
+
+    local textModeAliases =
+    {
+        ["Name + Time"] = "nameAndTime",
+        ["Name Only"] = "nameOnly",
+        ["Timer Only"] = "timerOnly",
+        Off = "off",
+    }
+
+    castBar.textMode = textModeAliases[castBar.textMode] or castBar.textMode or ACCOUNT_DEFAULTS.modules.castBar.textMode
+    if castBar.width == 320 or castBar.width == 380 then
+        castBar.width = ACCOUNT_DEFAULTS.modules.castBar.width
+    end
+    if castBar.height == 28 or castBar.height == 34 then
+        castBar.height = ACCOUNT_DEFAULTS.modules.castBar.height
+    end
+    if castBar.animationIntensity == 100 then
+        castBar.animationIntensity = ACCOUNT_DEFAULTS.modules.castBar.animationIntensity
+    end
+end
+
 function Settings:Initialize()
     self.account = ZO_SavedVars:NewAccountWide("NirnsteelUI_Account", SAVED_VARS_VERSION, nil, ACCOUNT_DEFAULTS)
     CopyDefaults(self.account, ACCOUNT_DEFAULTS)
     UpgradeDamageNumberDefaults(self.account)
     UpgradeExperienceTrackerDefaults(self.account)
     UpgradeResourceBarDefaults(self.account)
+    UpgradeCastBarDefaults(self.account)
     self.servers = ZO_SavedVars:NewAccountWide("NirnsteelUI_Servers", SAVED_VARS_VERSION, nil, SERVER_DEFAULTS)
     self.serverKey = GetServerKey()
     self.servers.servers[self.serverKey] = self.servers.servers[self.serverKey] or {}
@@ -429,6 +476,14 @@ end
 
 function Settings:GetActionBarFrames()
     return self.account.modules.actionBarFrames
+end
+
+function Settings:GetCastBar()
+    return self.account.modules.castBar
+end
+
+function Settings:GetCastBarPosition()
+    return self.server.modules.castBar
 end
 
 function Settings:GetCompass()
@@ -616,6 +671,59 @@ function Settings:SetActionBarGlobalCooldownEnabled(value)
     self:GetActionBarFrames().globalCooldownEnabled = value
     if Nirnsteel_UI.ActionBarFrames then
         Nirnsteel_UI.ActionBarFrames:RefreshSettings()
+    end
+end
+
+function Settings:IsCastBarEnabled()
+    return self:GetCastBar().enabled
+end
+
+function Settings:IsCastBarUnlocked()
+    return self:GetCastBar().unlocked
+end
+
+function Settings:SetCastBarEnabled(value)
+    self:GetCastBar().enabled = value
+    if Nirnsteel_UI.CastBar then
+        Nirnsteel_UI.CastBar:RefreshSettings()
+    end
+end
+
+function Settings:SetCastBarUnlocked(value)
+    self:GetCastBar().unlocked = value
+    if Nirnsteel_UI.CastBar then
+        Nirnsteel_UI.CastBar:RefreshSettings()
+    end
+end
+
+function Settings:SetCastBarValue(key, value)
+    local textModeAliases =
+    {
+        ["Name + Time"] = "nameAndTime",
+        ["Name Only"] = "nameOnly",
+        ["Timer Only"] = "timerOnly",
+        Off = "off",
+    }
+
+    if key == "textMode" then
+        value = textModeAliases[value] or value
+    end
+
+    self:GetCastBar()[key] = value
+    if Nirnsteel_UI.CastBar then
+        Nirnsteel_UI.CastBar:RefreshSettings()
+    end
+end
+
+function Settings:SetCastBarPosition(x, y)
+    local position = self:GetCastBarPosition()
+    position.x = x
+    position.y = y
+end
+
+function Settings:PreviewCastBar()
+    if Nirnsteel_UI.CastBar and Nirnsteel_UI.CastBar.Preview then
+        Nirnsteel_UI.CastBar:Preview()
     end
 end
 
@@ -1238,6 +1346,118 @@ function Settings:RegisterAddonMenu()
                     setFunc = function(value) self:SetActionBarGlobalCooldownEnabled(value) end,
                     disabled = function() return not self:IsActionBarFramesEnabled() end,
                     default = ACCOUNT_DEFAULTS.modules.actionBarFrames.globalCooldownEnabled,
+                },
+            },
+        },
+        {
+            type = "submenu",
+            name = "Cast Bar",
+            tooltip = "Settings for the Nirnsteel cast and channel progress bar.",
+            controls =
+            {
+                {
+                    type = "checkbox",
+                    name = "Enable Cast Bar Module",
+                    tooltip = "Shows a custom progress bar for non-instant slotted abilities with cast or channel time.",
+                    getFunc = function() return self:IsCastBarEnabled() end,
+                    setFunc = function(value) self:SetCastBarEnabled(value) end,
+                    default = ACCOUNT_DEFAULTS.modules.castBar.enabled,
+                },
+                {
+                    type = "checkbox",
+                    name = "Unlock Cast Bar",
+                    tooltip = "Shows a draggable handle for positioning the cast bar. Position is saved per server.",
+                    getFunc = function() return self:IsCastBarUnlocked() end,
+                    setFunc = function(value) self:SetCastBarUnlocked(value) end,
+                    disabled = function() return not self:IsCastBarEnabled() end,
+                    default = ACCOUNT_DEFAULTS.modules.castBar.unlocked,
+                },
+                {
+                    type = "checkbox",
+                    name = "Show Ability Icon",
+                    tooltip = "Shows the ability icon at the left edge of the cast bar.",
+                    getFunc = function() return self:GetCastBar().showIcon end,
+                    setFunc = function(value) self:SetCastBarValue("showIcon", value) end,
+                    disabled = function() return not self:IsCastBarEnabled() end,
+                    default = ACCOUNT_DEFAULTS.modules.castBar.showIcon,
+                },
+                {
+                    type = "dropdown",
+                    name = "Text Mode",
+                    tooltip = "Chooses the text shown while casting.",
+                    choices = { "Name + Time", "Name Only", "Timer Only", "Off" },
+                    choicesValues = { "nameAndTime", "nameOnly", "timerOnly", "off" },
+                    getFunc = function() return self:GetCastBar().textMode end,
+                    setFunc = function(value) self:SetCastBarValue("textMode", value) end,
+                    disabled = function() return not self:IsCastBarEnabled() end,
+                    default = ACCOUNT_DEFAULTS.modules.castBar.textMode,
+                },
+                {
+                    type = "slider",
+                    name = "Scale",
+                    tooltip = "Controls the overall size of the cast bar.",
+                    min = 70,
+                    max = 160,
+                    step = 1,
+                    getFunc = function() return self:GetCastBar().scale end,
+                    setFunc = function(value) self:SetCastBarValue("scale", value) end,
+                    disabled = function() return not self:IsCastBarEnabled() end,
+                    default = ACCOUNT_DEFAULTS.modules.castBar.scale,
+                },
+                {
+                    type = "slider",
+                    name = "Width",
+                    tooltip = "Controls the cast bar width.",
+                    min = 220,
+                    max = 620,
+                    step = 10,
+                    getFunc = function() return self:GetCastBar().width end,
+                    setFunc = function(value) self:SetCastBarValue("width", value) end,
+                    disabled = function() return not self:IsCastBarEnabled() end,
+                    default = ACCOUNT_DEFAULTS.modules.castBar.width,
+                },
+                {
+                    type = "slider",
+                    name = "Height",
+                    tooltip = "Controls the cast bar height.",
+                    min = 18,
+                    max = 48,
+                    step = 1,
+                    getFunc = function() return self:GetCastBar().height end,
+                    setFunc = function(value) self:SetCastBarValue("height", value) end,
+                    disabled = function() return not self:IsCastBarEnabled() end,
+                    default = ACCOUNT_DEFAULTS.modules.castBar.height,
+                },
+                {
+                    type = "slider",
+                    name = "Opacity",
+                    tooltip = "Controls cast bar opacity while visible.",
+                    min = 20,
+                    max = 100,
+                    step = 1,
+                    getFunc = function() return self:GetCastBar().opacity end,
+                    setFunc = function(value) self:SetCastBarValue("opacity", value) end,
+                    disabled = function() return not self:IsCastBarEnabled() end,
+                    default = ACCOUNT_DEFAULTS.modules.castBar.opacity,
+                },
+                {
+                    type = "slider",
+                    name = "Animation Intensity",
+                    tooltip = "Controls glow, start pulse, and completion flash strength.",
+                    min = 0,
+                    max = 160,
+                    step = 5,
+                    getFunc = function() return self:GetCastBar().animationIntensity end,
+                    setFunc = function(value) self:SetCastBarValue("animationIntensity", value) end,
+                    disabled = function() return not self:IsCastBarEnabled() end,
+                    default = ACCOUNT_DEFAULTS.modules.castBar.animationIntensity,
+                },
+                {
+                    type = "button",
+                    name = "Preview",
+                    tooltip = "Plays a sample cast bar animation.",
+                    func = function() self:PreviewCastBar() end,
+                    disabled = function() return not self:IsCastBarEnabled() end,
                 },
             },
         },
