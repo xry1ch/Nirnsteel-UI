@@ -1,4 +1,4 @@
-local ADDON_NAME = "Nirnsteel-UI"
+local ADDON_NAME = "NirnsteelUI"
 local EVENT_NAMESPACE = ADDON_NAME .. "_AdventureCamera"
 local UPDATE_NAMESPACE = EVENT_NAMESPACE .. "_Transition"
 

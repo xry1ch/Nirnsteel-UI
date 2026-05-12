@@ -1,4 +1,4 @@
-local ADDON_NAME = "Nirnsteel-UI"
+local ADDON_NAME = "NirnsteelUI"
 
 Nirnsteel_UI = Nirnsteel_UI or {}
 local LootHistory = {}

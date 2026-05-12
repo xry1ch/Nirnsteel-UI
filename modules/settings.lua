@@ -1,4 +1,4 @@
-local ADDON_NAME = "Nirnsteel-UI"
+local ADDON_NAME = "NirnsteelUI"
 local ADDON_DISPLAY_NAME = "NirnSteel UI"
 local SAVED_VARS_VERSION = 1
 

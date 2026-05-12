@@ -1,4 +1,4 @@
-local ADDON_NAME = "Nirnsteel-UI"
+local ADDON_NAME = "NirnsteelUI"
 local EVENT_NAMESPACE = ADDON_NAME .. "_DamageNumbers"
 
 Nirnsteel_UI = Nirnsteel_UI or {}
