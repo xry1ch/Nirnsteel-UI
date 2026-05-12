@@ -229,6 +229,10 @@ function AdventureCamera:RegisterEvents()
         self:OnCombatStateChanged(inCombat)
     end)
 
+    EVENT_MANAGER:RegisterForEvent(EVENT_NAMESPACE .. "_Deactivated", EVENT_PLAYER_DEACTIVATED, function()
+        self:RestoreActionProfile()
+    end)
+
     self.eventsRegistered = true
 end
 

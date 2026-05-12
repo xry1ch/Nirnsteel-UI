@@ -39,6 +39,17 @@ AddFlag(PLAYER_TARGET_TYPES, COMBAT_UNIT_TYPE_PLAYER)
 AddFlag(PLAYER_TARGET_TYPES, COMBAT_UNIT_TYPE_PLAYER_PET)
 AddFlag(PLAYER_TARGET_TYPES, COMBAT_UNIT_TYPE_PLAYER_COMPANION)
 
+local function RegisterFilteredCombatEvent(namespace, sourceType, result, callback)
+    EVENT_MANAGER:RegisterForEvent(namespace, EVENT_COMBAT_EVENT, callback)
+    EVENT_MANAGER:AddFilterForEvent(
+        namespace,
+        EVENT_COMBAT_EVENT,
+        REGISTER_FILTER_IS_ERROR, false,
+        REGISTER_FILTER_COMBAT_RESULT, result,
+        REGISTER_FILTER_SOURCE_COMBAT_UNIT_TYPE, sourceType
+    )
+end
+
 local function GetSettings()
     if Nirnsteel_UI.Settings then
         return Nirnsteel_UI.Settings:GetKillSound()
@@ -98,10 +109,19 @@ function KillSound:RegisterEvents()
         return
     end
 
-    EVENT_MANAGER:RegisterForEvent(EVENT_NAMESPACE, EVENT_COMBAT_EVENT, function(_, ...)
+    local callback = function(_, ...)
         self:OnCombatEvent(...)
-    end)
-    EVENT_MANAGER:AddFilterForEvent(EVENT_NAMESPACE, EVENT_COMBAT_EVENT, REGISTER_FILTER_IS_ERROR, false)
+    end
+
+    self.eventNamespaces = {}
+    for result in pairs(KILL_RESULTS) do
+        for sourceType in pairs(PLAYER_SOURCE_TYPES) do
+            local namespace = string.format("%s_Source_%s_%s", EVENT_NAMESPACE, tostring(sourceType), tostring(result))
+            RegisterFilteredCombatEvent(namespace, sourceType, result, callback)
+            table.insert(self.eventNamespaces, namespace)
+        end
+    end
+
     self.eventsRegistered = true
 end
 
@@ -110,7 +130,10 @@ function KillSound:UnregisterEvents()
         return
     end
 
-    EVENT_MANAGER:UnregisterForEvent(EVENT_NAMESPACE, EVENT_COMBAT_EVENT)
+    for _, namespace in ipairs(self.eventNamespaces or {}) do
+        EVENT_MANAGER:UnregisterForEvent(namespace, EVENT_COMBAT_EVENT)
+    end
+    self.eventNamespaces = nil
     self.eventsRegistered = nil
 end
 

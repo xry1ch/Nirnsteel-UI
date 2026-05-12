@@ -1,5 +1,5 @@
 local ADDON_NAME = "Nirnsteel-UI"
-local ADDON_DISPLAY_NAME = "Nirnsteel UI"
+local ADDON_DISPLAY_NAME = "NirnSteel UI"
 local SAVED_VARS_VERSION = 1
 
 Nirnsteel_UI = Nirnsteel_UI or {}
@@ -8,7 +8,6 @@ local Settings = {}
 Nirnsteel_UI.Settings = Settings
 
 local LAM_SLIDER_HANDLER_NAMESPACE = "LAM2_Slider"
-local LAM_SLIDER_GLOBAL_MOUSE_UP_PREFIX = "^LAM_Slider_OnGlobalMouseUp_"
 
 local function ClearLamSliderMouseWheel(control)
     if not control then
@@ -39,30 +38,11 @@ local function DisableLamSliderMouseWheelSupport()
             return originalSliderFactory(parent, sliderData, controlName)
         end
 
-        local originalRegisterForEvent = EVENT_MANAGER and EVENT_MANAGER.RegisterForEvent
-
-        if originalRegisterForEvent then
-            EVENT_MANAGER.RegisterForEvent = function(eventManager, namespace, event, ...)
-                if event == EVENT_GLOBAL_MOUSE_UP
-                    and type(namespace) == "string"
-                    and string.find(namespace, LAM_SLIDER_GLOBAL_MOUSE_UP_PREFIX)
-                then
-                    return
-                end
-
-                return originalRegisterForEvent(eventManager, namespace, event, ...)
-            end
-        end
-
         local ok, control = xpcall(function()
             return originalSliderFactory(parent, sliderData, controlName)
         end, function(errorMessage)
             return errorMessage
         end)
-
-        if originalRegisterForEvent then
-            EVENT_MANAGER.RegisterForEvent = originalRegisterForEvent
-        end
 
         if not ok then
             error(control)
@@ -167,6 +147,47 @@ local function ReadCurrentCameraProfile()
     return profile
 end
 
+local SOUND_CHOICE_LABELS =
+{
+    TRIBUTE_AGENT_HEALED = "Soft Chime",
+    STATS_RESPEC_CLEAR_ALL = "Clean Click",
+    TRIBUTE_CARD_UNTARGETED = "Card Tap",
+    VENGEANCE_PERK_DROP = "Reward Drop",
+    CONSOLE_GAME_ENTER = "Deep Hit",
+    RETURNING_PLAYER_OPEN_KEYBOARD = "Sharp Hit",
+    VENGEANCE_PERK_EQUIPPED = "Heavy Clang",
+    KEYBIND_BUTTON_DISABLED = "Muted Tick",
+    PROMOTIONAL_EVENT_REWARD_TO_CLAIM_PROMPT = "Reward Ping",
+    BATTLEGROUND_KILL_KILLING_BLOW = "Killing Blow",
+    CODE_REDEMPTION_SUCCESS = "Victory Chime",
+    BATTLEGROUND_LEAVE_MATCH = "Match Exit",
+    BATTLEGROUND_ROUND_RECAP_SCREEN_END = "Round End",
+    SKILLS_SUBCLASSING_TRAIN = "Skill Trained",
+    none = "None",
+    OUTFIT_WEAPON_TYPE_RUNE = "Rune Tick",
+    ENDLESS_DUNGEON_COUNTER_DOWN = "Counter Tick",
+    BATTLEGROUND_ROUND_RECAP_SCREEN_FINAL_WIN = "Major Victory",
+    BATTLEGROUND_ROUND_RECAP_SCREEN_WIN = "Victory",
+}
+
+local SOUND_KEYS_BY_LABEL = {}
+for key, label in pairs(SOUND_CHOICE_LABELS) do
+    SOUND_KEYS_BY_LABEL[label] = key
+end
+SOUND_KEYS_BY_LABEL["Outfit Weapon Type Rune"] = "OUTFIT_WEAPON_TYPE_RUNE"
+SOUND_KEYS_BY_LABEL["Promotional Event Reward To Claim"] = "PROMOTIONAL_EVENT_REWARD_TO_CLAIM_PROMPT"
+SOUND_KEYS_BY_LABEL["Endless Dungeon Counter Down"] = "ENDLESS_DUNGEON_COUNTER_DOWN"
+SOUND_KEYS_BY_LABEL["Battleground Round Recap Final Win"] = "BATTLEGROUND_ROUND_RECAP_SCREEN_FINAL_WIN"
+SOUND_KEYS_BY_LABEL["Battleground Round Recap Win"] = "BATTLEGROUND_ROUND_RECAP_SCREEN_WIN"
+
+local function GetSoundChoiceLabel(value)
+    return SOUND_CHOICE_LABELS[value] or value
+end
+
+local function NormalizeSoundChoice(value)
+    return SOUND_KEYS_BY_LABEL[value] or value
+end
+
 local ACCOUNT_DEFAULTS =
 {
     modules =
@@ -213,7 +234,7 @@ local ACCOUNT_DEFAULTS =
         {
             enabled = false,
             initialized = false,
-            transitionMS = 600,
+            transitionMS = 150,
             actionProfile = CAMERA_PROFILE_DEFAULTS,
             adventureProfile = CAMERA_PROFILE_DEFAULTS,
         },
@@ -481,6 +502,17 @@ local function UpgradeResourceBarDefaults(account)
     {
         Smoke = "smoke",
         Stillwater = "stillwater",
+        ["Still Water"] = "stillwater",
+        ZigZag = "ZigZag",
+        Zigzag = "ZigZag",
+        Stone = "Stone",
+        Dirt = "Dirt",
+        Lava = "Lava",
+        RockLava = "RockLava",
+        ["Rock Lava"] = "RockLava",
+        LavaWave = "LavaWave",
+        ["Lava Wave"] = "LavaWave",
+        Molten = "Molten",
     }
 
     for _, key in ipairs({ "healthTextFormat", "magickaTextFormat", "staminaTextFormat" }) do
@@ -493,6 +525,35 @@ local function UpgradeResourceBarDefaults(account)
     resourceBars.textFontKey = fontAliases[resourceBars.textFontKey] or resourceBars.textFontKey or ACCOUNT_DEFAULTS.modules.resourceBars.textFontKey
     resourceBars.textOutline = outlineAliases[resourceBars.textOutline] or resourceBars.textOutline or ACCOUNT_DEFAULTS.modules.resourceBars.textOutline
     resourceBars.barPatternKey = patternAliases[resourceBars.barPatternKey] or resourceBars.barPatternKey or ACCOUNT_DEFAULTS.modules.resourceBars.barPatternKey
+end
+
+local function UpgradeSoundChoiceLabels(account)
+    local modules = account and account.modules
+    if not modules then
+        return
+    end
+
+    if modules.lootHistory then
+        modules.lootHistory.regularSoundKey = NormalizeSoundChoice(modules.lootHistory.regularSoundKey)
+            or ACCOUNT_DEFAULTS.modules.lootHistory.regularSoundKey
+    end
+
+    if modules.damageNumbers then
+        modules.damageNumbers.critSoundKey = NormalizeSoundChoice(modules.damageNumbers.critSoundKey)
+            or ACCOUNT_DEFAULTS.modules.damageNumbers.critSoundKey
+    end
+
+    if modules.killSound then
+        modules.killSound.soundKey = NormalizeSoundChoice(modules.killSound.soundKey)
+            or ACCOUNT_DEFAULTS.modules.killSound.soundKey
+    end
+
+    if modules.experienceTracker then
+        modules.experienceTracker.chunkSoundKey = NormalizeSoundChoice(modules.experienceTracker.chunkSoundKey)
+            or ACCOUNT_DEFAULTS.modules.experienceTracker.chunkSoundKey
+        modules.experienceTracker.levelUpSoundKey = NormalizeSoundChoice(modules.experienceTracker.levelUpSoundKey)
+            or ACCOUNT_DEFAULTS.modules.experienceTracker.levelUpSoundKey
+    end
 end
 
 local function UpgradeCastBarDefaults(account)
@@ -530,6 +591,7 @@ function Settings:Initialize()
     UpgradeDamageNumberDefaults(self.account)
     UpgradeExperienceTrackerDefaults(self.account)
     UpgradeResourceBarDefaults(self.account)
+    UpgradeSoundChoiceLabels(self.account)
     UpgradeCastBarDefaults(self.account)
     self.servers = ZO_SavedVars:NewAccountWide("NirnsteelUI_Servers", SAVED_VARS_VERSION, nil, SERVER_DEFAULTS)
     self.serverKey = GetServerKey()
@@ -631,6 +693,10 @@ function Settings:SetLootHistorySoundsEnabled(value)
 end
 
 function Settings:SetLootHistoryValue(key, value)
+    if key == "regularSoundKey" then
+        value = NormalizeSoundChoice(value)
+    end
+
     self:GetLootHistory()[key] = value
 end
 
@@ -686,6 +752,10 @@ function Settings:SetDamageNumberCritSoundsEnabled(value)
 end
 
 function Settings:SetDamageNumberValue(key, value)
+    if key == "critSoundKey" then
+        value = NormalizeSoundChoice(value)
+    end
+
     self:GetDamageNumbers()[key] = value
     if Nirnsteel_UI.DamageNumbers then
         Nirnsteel_UI.DamageNumbers:RefreshSettings()
@@ -710,6 +780,10 @@ function Settings:SetKillSoundEnabled(value)
 end
 
 function Settings:SetKillSoundValue(key, value)
+    if key == "soundKey" then
+        value = NormalizeSoundChoice(value)
+    end
+
     self:GetKillSound()[key] = value
     if Nirnsteel_UI.KillSound then
         Nirnsteel_UI.KillSound:RefreshSettings()
@@ -919,6 +993,10 @@ function Settings:SetExperienceTrackerUnlocked(value)
 end
 
 function Settings:SetExperienceTrackerValue(key, value)
+    if key == "chunkSoundKey" or key == "levelUpSoundKey" then
+        value = NormalizeSoundChoice(value)
+    end
+
     self:GetExperienceTracker()[key] = value
     if Nirnsteel_UI.ExperienceTracker then
         Nirnsteel_UI.ExperienceTracker:RefreshSettings()
@@ -998,6 +1076,17 @@ function Settings:SetResourceBarsValue(key, value)
     {
         Smoke = "smoke",
         Stillwater = "stillwater",
+        ["Still Water"] = "stillwater",
+        ZigZag = "ZigZag",
+        Zigzag = "ZigZag",
+        Stone = "Stone",
+        Dirt = "Dirt",
+        Lava = "Lava",
+        RockLava = "RockLava",
+        ["Rock Lava"] = "RockLava",
+        LavaWave = "LavaWave",
+        ["Lava Wave"] = "LavaWave",
+        Molten = "Molten",
     }
 
     if key == "healthTextFormat" or key == "magickaTextFormat" or key == "staminaTextFormat" then
@@ -1092,8 +1181,8 @@ function Settings:RegisterAddonMenu()
         type = "panel",
         name = ADDON_DISPLAY_NAME,
         displayName = ADDON_DISPLAY_NAME,
-        author = "Nirnsteel",
-        version = "0.1.0",
+        author = "Wrynch",
+        version = "1.0.0",
         registerForRefresh = true,
         registerForDefaults = true,
     }
@@ -1102,18 +1191,18 @@ function Settings:RegisterAddonMenu()
     {
         {
             type = "description",
-            text = "Account-wide module settings are kept separate from per-server HUD positions.",
+            text = "Most settings apply to your whole account. When you unlock and move a HUD element, its position is saved for the server you are on.",
         },
         {
             type = "submenu",
             name = "Loot History",
-            tooltip = "Settings for the Nirnsteel loot history replacement.",
+            tooltip = "Customize the loot messages and sounds shown on the HUD.",
             controls =
             {
                 {
                     type = "checkbox",
-                    name = "Enable Loot History Module",
-                    tooltip = "Completely enables or disables the Nirnsteel loot history replacement.",
+                    name = "Enable Loot History",
+                    tooltip = "Shows Nirnsteel's loot history frame instead of the default one.",
                     getFunc = function() return self:IsLootHistoryEnabled() end,
                     setFunc = function(value) self:SetLootHistoryEnabled(value) end,
                     default = ACCOUNT_DEFAULTS.modules.lootHistory.enabled,
@@ -1121,7 +1210,7 @@ function Settings:RegisterAddonMenu()
                 {
                     type = "checkbox",
                     name = "Unlock Loot Frame",
-                    tooltip = "Shows a draggable HUD handle for positioning the loot history frame. Position is saved per server.",
+                    tooltip = "Shows a handle so you can drag the loot history frame. The position is saved for this server.",
                     getFunc = function() return self:IsLootHistoryUnlocked() end,
                     setFunc = function(value) self:SetLootHistoryUnlocked(value) end,
                     disabled = function() return not self:IsLootHistoryEnabled() end,
@@ -1142,30 +1231,23 @@ function Settings:RegisterAddonMenu()
                     tooltip = "Chooses the sound played for non-legendary loot.",
                     choices =
                     {
-                        "TRIBUTE_AGENT_HEALED",
-                        "STATS_RESPEC_CLEAR_ALL",
-                        "TRIBUTE_CARD_UNTARGETED",
-                        "VENGEANCE_PERK_DROP",
+                        "Soft Chime",
+                        "Clean Click",
+                        "Card Tap",
+                        "Reward Drop",
                     },
-                    choicesValues =
-                    {
-                        "TRIBUTE_AGENT_HEALED",
-                        "STATS_RESPEC_CLEAR_ALL",
-                        "TRIBUTE_CARD_UNTARGETED",
-                        "VENGEANCE_PERK_DROP",
-                    },
-                    getFunc = function() return self:GetLootHistory().regularSoundKey end,
+                    getFunc = function() return GetSoundChoiceLabel(self:GetLootHistory().regularSoundKey) end,
                     setFunc = function(value)
                         self:SetLootHistoryValue("regularSoundKey", value)
                         self:PreviewLootHistoryRegularSound()
                     end,
                     disabled = function() return not self:IsLootHistoryEnabled() or not self:AreLootHistorySoundsEnabled() end,
-                    default = ACCOUNT_DEFAULTS.modules.lootHistory.regularSoundKey,
+                    default = GetSoundChoiceLabel(ACCOUNT_DEFAULTS.modules.lootHistory.regularSoundKey),
                 },
                 {
                     type = "checkbox",
-                    name = "Filter Out Experience",
-                    tooltip = "Prevents experience gains from appearing in the Nirnsteel loot history stream.",
+                    name = "Hide Experience Gains",
+                    tooltip = "Keeps XP gains out of the loot history feed.",
                     getFunc = function() return self:ShouldFilterLootHistoryExperience() end,
                     setFunc = function(value) self:SetLootHistoryFilterExperience(value) end,
                     disabled = function() return not self:IsLootHistoryEnabled() end,
@@ -1176,13 +1258,13 @@ function Settings:RegisterAddonMenu()
         {
             type = "submenu",
             name = "Damage Numbers",
-            tooltip = "Settings for custom Nirnsteel combat damage numbers.",
+            tooltip = "Customize the combat numbers shown near the center of the screen.",
             controls =
             {
                 {
                     type = "checkbox",
-                    name = "Enable Damage Numbers Module",
-                    tooltip = "Shows custom Nirnsteel combat damage numbers near the center of combat.",
+                    name = "Enable Damage Numbers",
+                    tooltip = "Shows Nirnsteel combat damage numbers near the center of the screen.",
                     getFunc = function() return self:IsDamageNumbersEnabled() end,
                     setFunc = function(value) self:SetDamageNumbersEnabled(value) end,
                     default = ACCOUNT_DEFAULTS.modules.damageNumbers.enabled,
@@ -1190,7 +1272,7 @@ function Settings:RegisterAddonMenu()
                 {
                     type = "checkbox",
                     name = "Unlock Damage Number Origin",
-                    tooltip = "Shows a draggable anchor for the center point where damage numbers spawn. Position is saved per server.",
+                    tooltip = "Shows a handle for the point where damage numbers appear. The position is saved for this server.",
                     getFunc = function() return self:IsDamageNumbersUnlocked() end,
                     setFunc = function(value) self:SetDamageNumbersUnlocked(value) end,
                     disabled = function() return not self:IsDamageNumbersEnabled() end,
@@ -1199,7 +1281,7 @@ function Settings:RegisterAddonMenu()
                 {
                     type = "checkbox",
                     name = "Hide Default Damage Numbers",
-                    tooltip = "Disables ESO damage and DoT scrolling combat text categories while the Nirnsteel module is enabled.",
+                    tooltip = "Hides ESO's built-in damage numbers while Nirnsteel damage numbers are enabled.",
                     getFunc = function() return self:ShouldHideDefaultDamageNumbers() end,
                     setFunc = function(value) self:SetDamageNumbersHideDefault(value) end,
                     disabled = function() return not self:IsDamageNumbersEnabled() end,
@@ -1208,7 +1290,7 @@ function Settings:RegisterAddonMenu()
                 {
                     type = "checkbox",
                     name = "Critical Hit Sound",
-                    tooltip = "Plays a throttled impact sound for critical damage events.",
+                    tooltip = "Plays a short impact sound when you critically hit.",
                     getFunc = function() return self:AreDamageNumberCritSoundsEnabled() end,
                     setFunc = function(value) self:SetDamageNumberCritSoundsEnabled(value) end,
                     disabled = function() return not self:IsDamageNumbersEnabled() end,
@@ -1300,28 +1382,19 @@ function Settings:RegisterAddonMenu()
                     tooltip = "Chooses the sound played for critical damage numbers.",
                     choices =
                     {
-                        "CONSOLE_GAME_ENTER",
-                        "RETURNING_PLAYER_OPEN_KEYBOARD",
-                        "VENGEANCE_PERK_EQUIPPED",
-                        "KEYBIND_BUTTON_DISABLED",
-                        "PROMOTIONAL_EVENT_REWARD_TO_CLAIM_PROMPT"
+                        "Deep Hit",
+                        "Sharp Hit",
+                        "Heavy Clang",
+                        "Muted Tick",
+                        "Reward Ping"
                     },
-                    choicesValues =
-                    {
-                        "CONSOLE_GAME_ENTER",
-                        "RETURNING_PLAYER_OPEN_KEYBOARD",
-                        "VENGEANCE_PERK_EQUIPPED",
-                        "KEYBIND_BUTTON_DISABLED",
-                        "PROMOTIONAL_EVENT_REWARD_TO_CLAIM_PROMPT"
-
-                    },
-                    getFunc = function() return self:GetDamageNumbers().critSoundKey end,
+                    getFunc = function() return GetSoundChoiceLabel(self:GetDamageNumbers().critSoundKey) end,
                     setFunc = function(value)
                         self:SetDamageNumberValue("critSoundKey", value)
                         self:PreviewDamageNumberCritSound()
                     end,
                     disabled = function() return not self:IsDamageNumbersEnabled() or not self:AreDamageNumberCritSoundsEnabled() end,
-                    default = ACCOUNT_DEFAULTS.modules.damageNumbers.critSoundKey,
+                    default = GetSoundChoiceLabel(ACCOUNT_DEFAULTS.modules.damageNumbers.critSoundKey),
                 },
                 {
                     type = "slider",
@@ -1424,16 +1497,16 @@ function Settings:RegisterAddonMenu()
         {
             type = "submenu",
             name = "Kill Sound",
-            tooltip = "Settings for the sound played when your character lands the killing blow.",
+            tooltip = "Choose the sound played when you land the killing blow.",
             controls =
             {
                 {
                     type = "description",
-                    text = "Kill sound volume follows ESO audio settings (SFX/UI volume). ESO API PlaySound has no per-sound volume parameter.",
+                    text = "Kill sounds use your ESO SFX/UI volume. ESO does not let addons set a separate volume for one sound.",
                 },
                 {
                     type = "checkbox",
-                    name = "Enable Kill Sound Module",
+                    name = "Enable Kill Sound",
                     tooltip = "Plays a configurable sound when your character lands the killing blow.",
                     getFunc = function() return self:IsKillSoundEnabled() end,
                     setFunc = function(value) self:SetKillSoundEnabled(value) end,
@@ -1445,27 +1518,19 @@ function Settings:RegisterAddonMenu()
                     tooltip = "Chooses the sound played for your killing blows.",
                     choices =
                     {
-                        "BATTLEGROUND_KILL_KILLING_BLOW",
-                        "CODE_REDEMPTION_SUCCESS",
-                        "BATTLEGROUND_LEAVE_MATCH",
-                        "BATTLEGROUND_ROUND_RECAP_SCREEN_END",
-                        "SKILLS_SUBCLASSING_TRAIN"
+                        "Killing Blow",
+                        "Victory Chime",
+                        "Match Exit",
+                        "Round End",
+                        "Skill Trained"
                     },
-                    choicesValues =
-                    {
-                        "BATTLEGROUND_KILL_KILLING_BLOW",
-                        "CODE_REDEMPTION_SUCCESS",
-                        "BATTLEGROUND_LEAVE_MATCH",
-                        "BATTLEGROUND_ROUND_RECAP_SCREEN_END",
-                        "SKILLS_SUBCLASSING_TRAIN"
-                    },
-                    getFunc = function() return self:GetKillSound().soundKey end,
+                    getFunc = function() return GetSoundChoiceLabel(self:GetKillSound().soundKey) end,
                     setFunc = function(value)
                         self:SetKillSoundValue("soundKey", value)
                         self:PreviewKillSound()
                     end,
                     disabled = function() return not self:IsKillSoundEnabled() end,
-                    default = ACCOUNT_DEFAULTS.modules.killSound.soundKey,
+                    default = GetSoundChoiceLabel(ACCOUNT_DEFAULTS.modules.killSound.soundKey),
                 },
             },
         },
@@ -1477,7 +1542,7 @@ function Settings:RegisterAddonMenu()
             {
                 {
                     type = "checkbox",
-                    name = "Enable Action Bar Frames Module",
+                    name = "Enable Action Bar Frames",
                     tooltip = "Replaces action bar button frames and highlights ready ultimate and quickslot cooldown states.",
                     getFunc = function() return self:IsActionBarFramesEnabled() end,
                     setFunc = function(value) self:SetActionBarFramesEnabled(value) end,
@@ -1511,11 +1576,11 @@ function Settings:RegisterAddonMenu()
             {
                 {
                     type = "description",
-                    text = "Adventure Camera keeps two profiles for the same ESO third-person camera settings. The first time you enable it, your current camera is copied into both profiles so nothing jumps. Out of combat, the Adventure Camera sliders are applied. In combat, the captured Action Camera profile is restored. Use the capture button after changing ESO's camera settings to update the Action Camera profile. When disabled, the addon stops transitioning and restores the captured Action Camera values.",
+                    text = "Adventure Camera keeps one camera setup for combat and another for exploration. When you first enable it, your current camera is copied into both setups so nothing jumps. Adjust the sliders below for exploration, then use the capture button whenever you want your current ESO camera to become the combat setup.",
                 },
                 {
                     type = "checkbox",
-                    name = "Enable Adventure Camera Module",
+                    name = "Enable Adventure Camera",
                     tooltip = "Uses the Adventure Camera profile out of combat and the captured Action Camera profile in combat.",
                     getFunc = function() return self:IsAdventureCameraEnabled() end,
                     setFunc = function(value) self:SetAdventureCameraEnabled(value) end,
@@ -1536,7 +1601,7 @@ function Settings:RegisterAddonMenu()
                 {
                     type = "button",
                     name = "Capture Current as Action Camera",
-                    tooltip = "Stores the current ESO third-person camera settings as the in-combat Action Camera profile.",
+                    tooltip = "Uses your current ESO third-person camera settings as the combat camera.",
                     func = function() self:CaptureAdventureCameraActionProfile() end,
                 },
                 {
@@ -1614,12 +1679,12 @@ function Settings:RegisterAddonMenu()
         {
             type = "submenu",
             name = "Cast Bar",
-            tooltip = "Settings for the Nirnsteel cast and channel progress bar.",
+            tooltip = "Customize the cast and channel progress bar.",
             controls =
             {
                 {
                     type = "checkbox",
-                    name = "Enable Cast Bar Module",
+                    name = "Enable Cast Bar",
                     tooltip = "Shows a custom progress bar for non-instant slotted abilities with cast or channel time.",
                     getFunc = function() return self:IsCastBarEnabled() end,
                     setFunc = function(value) self:SetCastBarEnabled(value) end,
@@ -1628,7 +1693,7 @@ function Settings:RegisterAddonMenu()
                 {
                     type = "checkbox",
                     name = "Unlock Cast Bar",
-                    tooltip = "Shows a draggable handle for positioning the cast bar. Position is saved per server.",
+                    tooltip = "Shows a handle so you can drag the cast bar. The position is saved for this server.",
                     getFunc = function() return self:IsCastBarUnlocked() end,
                     setFunc = function(value) self:SetCastBarUnlocked(value) end,
                     disabled = function() return not self:IsCastBarEnabled() end,
@@ -1731,7 +1796,7 @@ function Settings:RegisterAddonMenu()
             {
                 {
                     type = "checkbox",
-                    name = "Enable Compass Module",
+                    name = "Enable Compass Frame",
                     tooltip = "Restyles the stock compass frame with a darker Nirnsteel frame using ESO art.",
                     getFunc = function() return self:IsCompassEnabled() end,
                     setFunc = function(value) self:SetCompassEnabled(value) end,
@@ -1742,7 +1807,7 @@ function Settings:RegisterAddonMenu()
         {
             type = "submenu",
             name = "Experience Tracker",
-            tooltip = "Settings for the custom HUD XP and Champion Point gain tracker.",
+            tooltip = "Customize the HUD XP and Champion Point gain tracker.",
             controls =
             {
                 {
@@ -1756,7 +1821,7 @@ function Settings:RegisterAddonMenu()
                 {
                     type = "checkbox",
                     name = "Unlock Experience Tracker",
-                    tooltip = "Shows a draggable handle for positioning the tracker. Position is saved per server.",
+                    tooltip = "Shows a handle so you can drag the tracker. The position is saved for this server.",
                     getFunc = function() return self:IsExperienceTrackerUnlocked() end,
                     setFunc = function(value) self:SetExperienceTrackerUnlocked(value) end,
                     disabled = function() return not self:IsExperienceTrackerEnabled() end,
@@ -1825,18 +1890,11 @@ function Settings:RegisterAddonMenu()
                     choices =
                     {
                         "None",
-                        "Outfit Weapon Type Rune",
-                        "Promotional Event Reward To Claim",
-                        "Endless Dungeon Counter Down",
+                        "Rune Tick",
+                        "Reward Ping",
+                        "Counter Tick",
                     },
-                    choicesValues =
-                    {
-                        "none",
-                        "OUTFIT_WEAPON_TYPE_RUNE",
-                        "PROMOTIONAL_EVENT_REWARD_TO_CLAIM_PROMPT",
-                        "ENDLESS_DUNGEON_COUNTER_DOWN",
-                    },
-                    getFunc = function() return self:GetExperienceTracker().chunkSoundKey end,
+                    getFunc = function() return GetSoundChoiceLabel(self:GetExperienceTracker().chunkSoundKey) end,
                     setFunc = function(value)
                         self:SetExperienceTrackerValue("chunkSoundKey", value)
                         if Nirnsteel_UI.ExperienceTracker and Nirnsteel_UI.ExperienceTracker.PreviewChunkSound then
@@ -1844,7 +1902,7 @@ function Settings:RegisterAddonMenu()
                         end
                     end,
                     disabled = function() return not self:IsExperienceTrackerEnabled() end,
-                    default = ACCOUNT_DEFAULTS.modules.experienceTracker.chunkSoundKey,
+                    default = GetSoundChoiceLabel(ACCOUNT_DEFAULTS.modules.experienceTracker.chunkSoundKey),
                 },
                 {
                     type = "dropdown",
@@ -1853,19 +1911,18 @@ function Settings:RegisterAddonMenu()
                     choices =
                     {
                         "None",
-                        "Battleground Round Recap Final Win",
-                        "Battleground Round Recap Win",
+                        "Major Victory",
+                        "Victory",
                     },
-                    choicesValues =
-                    {
-                        "none",
-                        "BATTLEGROUND_ROUND_RECAP_SCREEN_FINAL_WIN",
-                        "BATTLEGROUND_ROUND_RECAP_SCREEN_WIN",
-                    },
-                    getFunc = function() return self:GetExperienceTracker().levelUpSoundKey end,
-                    setFunc = function(value) self:SetExperienceTrackerValue("levelUpSoundKey", value) end,
+                    getFunc = function() return GetSoundChoiceLabel(self:GetExperienceTracker().levelUpSoundKey) end,
+                    setFunc = function(value)
+                        self:SetExperienceTrackerValue("levelUpSoundKey", value)
+                        if Nirnsteel_UI.ExperienceTracker and Nirnsteel_UI.ExperienceTracker.PreviewLevelUpSound then
+                            Nirnsteel_UI.ExperienceTracker:PreviewLevelUpSound()
+                        end
+                    end,
                     disabled = function() return not self:IsExperienceTrackerEnabled() end,
-                    default = ACCOUNT_DEFAULTS.modules.experienceTracker.levelUpSoundKey,
+                    default = GetSoundChoiceLabel(ACCOUNT_DEFAULTS.modules.experienceTracker.levelUpSoundKey),
                 },
                 {
                     type = "checkbox",
@@ -1975,13 +2032,13 @@ function Settings:RegisterAddonMenu()
         {
             type = "submenu",
             name = "Resource Bars",
-            tooltip = "Settings for the centered Nirnsteel player resource bars.",
+            tooltip = "Customize the centered health, magicka, and stamina bars.",
             reference = "Nirnsteel_UI_ResourceBarsSubmenu",
             controls =
             {
                 {
                     type = "checkbox",
-                    name = "Enable Resource Bars Module",
+                    name = "Enable Resource Bars",
                     tooltip = "Replaces the stock player health, magicka, and stamina bars with centered Nirnsteel bars.",
                     getFunc = function() return self:IsResourceBarsEnabled() end,
                     setFunc = function(value) self:SetResourceBarsEnabled(value) end,
@@ -1990,7 +2047,7 @@ function Settings:RegisterAddonMenu()
                 {
                     type = "checkbox",
                     name = "Unlock Resource Bars",
-                    tooltip = "Shows a draggable handle for positioning resource bars. Position is saved per server.",
+                    tooltip = "Shows a handle so you can drag the resource bars. The position is saved for this server.",
                     getFunc = function() return self:IsResourceBarsUnlocked() end,
                     setFunc = function(value) self:SetResourceBarsUnlocked(value) end,
                     disabled = function() return not self:IsResourceBarsEnabled() end,
@@ -2095,7 +2152,7 @@ function Settings:RegisterAddonMenu()
                 {
                     type = "checkbox",
                     name = "Gloss Overlay",
-                    tooltip = "Toggles the top gloss effect.",
+                    tooltip = "Adds a light gloss along the top of each bar.",
                     getFunc = function() return self:GetResourceBars().glossEnabled end,
                     setFunc = function(value) self:SetResourceBarsValue("glossEnabled", value) end,
                     disabled = function() return not self:IsResourceBarsEnabled() end,
@@ -2114,8 +2171,8 @@ function Settings:RegisterAddonMenu()
                     type = "dropdown",
                     name = "Fill Pattern",
                     tooltip = "Pattern texture layered over the bar color.",
-                    choices = { "Smoke", "Stillwater", "ZigZag", "Stone", "Dirt", "Lava", "RockLava", "LavaWave", "Molten" },
-                    choicesValues = { "smoke", "stillwater" },
+                    choices = { "Smoke", "Still Water", "Zigzag", "Stone", "Dirt", "Lava", "Rock Lava", "Lava Wave", "Molten" },
+                    choicesValues = { "smoke", "stillwater", "ZigZag", "Stone", "Dirt", "Lava", "RockLava", "LavaWave", "Molten" },
                     getFunc = function() return self:GetResourceBars().barPatternKey end,
                     setFunc = function(value) self:SetResourceBarsValue("barPatternKey", value) end,
                     disabled = function() return not self:IsResourceBarsEnabled() or not self:GetResourceBars().barPatternEnabled end,
@@ -2234,7 +2291,7 @@ function Settings:RegisterAddonMenu()
                 {
                     type = "slider",
                     name = "Corner Rounding",
-                    tooltip = "Corner size for the ESO backdrop border. Fill clipping is limited by ESO UI controls.",
+                    tooltip = "Rounds the resource bar frame corners. ESO may still draw the fill with square edges.",
                     min = 0,
                     max = 12,
                     step = 1,
@@ -2269,7 +2326,7 @@ function Settings:RegisterAddonMenu()
                 },
                 {
                     type = "header",
-                    name = "Text Personalization",
+                    name = "Text",
                 },
                 {
                     type = "dropdown",
@@ -2338,7 +2395,7 @@ function Settings:RegisterAddonMenu()
                 {
                     type = "slider",
                     name = "Text Side Inset",
-                    tooltip = "Padding used by side-positioned text.",
+                    tooltip = "Moves side text inward from the bar edges.",
                     min = 0,
                     max = 24,
                     step = 1,
@@ -2350,7 +2407,7 @@ function Settings:RegisterAddonMenu()
                 {
                     type = "slider",
                     name = "Text Vertical Offset",
-                    tooltip = "Moves bar text up or down to compensate for font baseline differences.",
+                    tooltip = "Moves bar text up or down.",
                     min = -8,
                     max = 8,
                     step = 1,

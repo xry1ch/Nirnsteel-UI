@@ -132,6 +132,17 @@ AddFlag(PLAYER_RELATED_TARGET_TYPES, COMBAT_UNIT_TYPE_PLAYER_COMPANION)
 
 local lastCritSoundMS = -DEFAULT_SETTINGS.soundThrottleMS
 
+local function RegisterFilteredCombatEvent(namespace, unitFilterType, unitType, result, callback)
+    EVENT_MANAGER:RegisterForEvent(namespace, EVENT_COMBAT_EVENT, callback)
+    EVENT_MANAGER:AddFilterForEvent(
+        namespace,
+        EVENT_COMBAT_EVENT,
+        REGISTER_FILTER_IS_ERROR, false,
+        REGISTER_FILTER_COMBAT_RESULT, result,
+        unitFilterType, unitType
+    )
+end
+
 local function GetSettings()
     if Nirnsteel_UI.Settings then
         return Nirnsteel_UI.Settings:GetDamageNumbers()
@@ -574,9 +585,25 @@ function DamageNumbers:RegisterCombatEvents()
         return
     end
 
-    EVENT_MANAGER:RegisterForEvent(EVENT_NAMESPACE, EVENT_COMBAT_EVENT, function(_, ...)
+    local callback = function(_, ...)
         self:OnCombatEvent(...)
-    end)
+    end
+
+    self.eventNamespaces = {}
+    for result in pairs(DAMAGE_RESULTS) do
+        for unitType in pairs(PLAYER_RELATED_SOURCE_TYPES) do
+            local namespace = string.format("%s_Source_%s_%s", EVENT_NAMESPACE, tostring(unitType), tostring(result))
+            RegisterFilteredCombatEvent(namespace, REGISTER_FILTER_SOURCE_COMBAT_UNIT_TYPE, unitType, result, callback)
+            table.insert(self.eventNamespaces, namespace)
+        end
+
+        for unitType in pairs(PLAYER_RELATED_TARGET_TYPES) do
+            local namespace = string.format("%s_Target_%s_%s", EVENT_NAMESPACE, tostring(unitType), tostring(result))
+            RegisterFilteredCombatEvent(namespace, REGISTER_FILTER_TARGET_COMBAT_UNIT_TYPE, unitType, result, callback)
+            table.insert(self.eventNamespaces, namespace)
+        end
+    end
+
     self.eventsRegistered = true
 end
 
@@ -585,13 +612,45 @@ function DamageNumbers:UnregisterCombatEvents()
         return
     end
 
-    EVENT_MANAGER:UnregisterForEvent(EVENT_NAMESPACE, EVENT_COMBAT_EVENT)
+    for _, namespace in ipairs(self.eventNamespaces or {}) do
+        EVENT_MANAGER:UnregisterForEvent(namespace, EVENT_COMBAT_EVENT)
+    end
+    self.eventNamespaces = nil
     self.eventsRegistered = nil
 end
 
-function DamageNumbers:OnCombatEvent(result, isError, abilityName, abilityGraphic, abilityActionSlotType, sourceName, sourceType, targetName, targetType, hitValue)
+function DamageNumbers:RegisterLifecycleEvents()
+    if self.lifecycleEventsRegistered then
+        return
+    end
+
+    EVENT_MANAGER:RegisterForEvent(EVENT_NAMESPACE .. "_Deactivated", EVENT_PLAYER_DEACTIVATED, function()
+        self:RestoreDefaultDamageNumbers()
+    end)
+    self.lifecycleEventsRegistered = true
+end
+
+function DamageNumbers:OnCombatEvent(result, isError, abilityName, abilityGraphic, abilityActionSlotType, sourceName, sourceType, targetName, targetType, hitValue, powerType, damageType, log, sourceUnitId, targetUnitId, abilityId)
     if isError or not IsDamageEvent(result, hitValue) then
         return
+    end
+
+    if PLAYER_RELATED_SOURCE_TYPES[sourceType] and PLAYER_RELATED_TARGET_TYPES[targetType] then
+        local nowMS = GetFrameTimeMilliseconds()
+        if self.lastCombatEventMS == nowMS
+            and self.lastCombatResult == result
+            and self.lastCombatHitValue == hitValue
+            and self.lastCombatSourceUnitId == sourceUnitId
+            and self.lastCombatTargetUnitId == targetUnitId
+            and self.lastCombatAbilityId == abilityId then
+            return
+        end
+        self.lastCombatEventMS = nowMS
+        self.lastCombatResult = result
+        self.lastCombatHitValue = hitValue
+        self.lastCombatSourceUnitId = sourceUnitId
+        self.lastCombatTargetUnitId = targetUnitId
+        self.lastCombatAbilityId = abilityId
     end
 
     local direction
@@ -607,6 +666,8 @@ function DamageNumbers:OnCombatEvent(result, isError, abilityName, abilityGraphi
 end
 
 function DamageNumbers:RefreshSettings()
+    self:RegisterLifecycleEvents()
+
     if IsModuleEnabled() then
         self:RegisterCombatEvents()
     else

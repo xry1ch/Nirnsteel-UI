@@ -1303,7 +1303,12 @@ function ResourceBars:UpdateResource(key, current, maximum, effectiveMax, instan
         self:UpdateHealthShieldOverlay(current, maximum)
     end
 
-    self:ApplyLayout()
+    if ShouldShowFeedback() then
+        self:UpdateLowResourceFeedback(frame, key, current, maximum)
+    else
+        HideFrameFeedback(frame)
+    end
+
     self:UpdateAllLabels()
     self:UpdateVisibility()
 end
@@ -1433,12 +1438,15 @@ function ResourceBars:RegisterEvents()
     EVENT_MANAGER:RegisterForEvent(EVENT_NAMESPACE .. "_ShieldAdded", EVENT_UNIT_ATTRIBUTE_VISUAL_ADDED, function(_, ...)
         self:OnShieldVisualAdded(...)
     end)
+    EVENT_MANAGER:AddFilterForEvent(EVENT_NAMESPACE .. "_ShieldAdded", EVENT_UNIT_ATTRIBUTE_VISUAL_ADDED, REGISTER_FILTER_UNIT_TAG, "player")
     EVENT_MANAGER:RegisterForEvent(EVENT_NAMESPACE .. "_ShieldUpdated", EVENT_UNIT_ATTRIBUTE_VISUAL_UPDATED, function(_, ...)
         self:OnShieldVisualUpdated(...)
     end)
+    EVENT_MANAGER:AddFilterForEvent(EVENT_NAMESPACE .. "_ShieldUpdated", EVENT_UNIT_ATTRIBUTE_VISUAL_UPDATED, REGISTER_FILTER_UNIT_TAG, "player")
     EVENT_MANAGER:RegisterForEvent(EVENT_NAMESPACE .. "_ShieldRemoved", EVENT_UNIT_ATTRIBUTE_VISUAL_REMOVED, function(_, ...)
         self:OnShieldVisualRemoved(...)
     end)
+    EVENT_MANAGER:AddFilterForEvent(EVENT_NAMESPACE .. "_ShieldRemoved", EVENT_UNIT_ATTRIBUTE_VISUAL_REMOVED, REGISTER_FILTER_UNIT_TAG, "player")
 
     EVENT_MANAGER:RegisterForEvent(EVENT_NAMESPACE .. "_Activated", EVENT_PLAYER_ACTIVATED, function()
         self:RefreshPowerValues(true)

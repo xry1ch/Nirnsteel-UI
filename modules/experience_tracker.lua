@@ -1452,6 +1452,13 @@ function ExperienceTracker:PreviewChunkSound()
     end
 end
 
+function ExperienceTracker:PreviewLevelUpSound()
+    local sound = GetLevelUpSound()
+    if sound then
+        PlaySound(sound)
+    end
+end
+
 function ExperienceTracker:UpdateVisibility()
     if not IsModuleEnabled() then
         self:HideRoot()
@@ -1485,6 +1492,14 @@ function ExperienceTracker:HideStockProgressBar()
     end
 end
 
+function ExperienceTracker:CallPlayerProgressOriginal(originalMethod, progressBar, ...)
+    local result1, result2, result3 = originalMethod(progressBar, ...)
+    if self:CanSuppressStockProgressBar() then
+        self:HideStockProgressBar()
+    end
+    return result1, result2, result3
+end
+
 function ExperienceTracker:InstallStockHooks()
     if self.stockHooksInstalled then
         return true
@@ -1499,35 +1514,19 @@ function ExperienceTracker:InstallStockHooks()
     self.originalPlayerProgressRefreshCurrentBar = PLAYER_PROGRESS_BAR.RefreshCurrentBar
 
     PLAYER_PROGRESS_BAR.Show = function(progressBar, ...)
-        if ExperienceTracker:CanSuppressStockProgressBar() then
-            ExperienceTracker:HideStockProgressBar()
-            return
-        end
-        return ExperienceTracker.originalPlayerProgressShow(progressBar, ...)
+        return ExperienceTracker:CallPlayerProgressOriginal(ExperienceTracker.originalPlayerProgressShow, progressBar, ...)
     end
 
     PLAYER_PROGRESS_BAR.ShowIncrease = function(progressBar, ...)
-        if ExperienceTracker:CanSuppressStockProgressBar() then
-            ExperienceTracker:HideStockProgressBar()
-            return
-        end
-        return ExperienceTracker.originalPlayerProgressShowIncrease(progressBar, ...)
+        return ExperienceTracker:CallPlayerProgressOriginal(ExperienceTracker.originalPlayerProgressShowIncrease, progressBar, ...)
     end
 
     PLAYER_PROGRESS_BAR.ShowCurrent = function(progressBar, ...)
-        if ExperienceTracker:CanSuppressStockProgressBar() then
-            ExperienceTracker:HideStockProgressBar()
-            return
-        end
-        return ExperienceTracker.originalPlayerProgressShowCurrent(progressBar, ...)
+        return ExperienceTracker:CallPlayerProgressOriginal(ExperienceTracker.originalPlayerProgressShowCurrent, progressBar, ...)
     end
 
     PLAYER_PROGRESS_BAR.RefreshCurrentBar = function(progressBar, ...)
-        if ExperienceTracker:CanSuppressStockProgressBar() then
-            ExperienceTracker:HideStockProgressBar()
-            return
-        end
-        return ExperienceTracker.originalPlayerProgressRefreshCurrentBar(progressBar, ...)
+        return ExperienceTracker:CallPlayerProgressOriginal(ExperienceTracker.originalPlayerProgressRefreshCurrentBar, progressBar, ...)
     end
 
     self.stockHooksInstalled = true

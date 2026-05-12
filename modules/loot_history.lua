@@ -4,16 +4,21 @@ Nirnsteel_UI = Nirnsteel_UI or {}
 local LootHistory = {}
 Nirnsteel_UI.LootHistory = LootHistory
 
-local TEMPLATE_NAME = "Nirnsteel_LootHistory_KeyboardEntry"
-local STOCK_TEMPLATE_NAME = "ZO_LootHistory_KeyboardEntry"
-local PATCH_UPDATE_NAME = "Nirnsteel_UI_LootHistory_WaitForKeyboard"
+local KEYBOARD_TEMPLATE_NAME = "Nirnsteel_LootHistory_KeyboardEntry"
+local GAMEPAD_TEMPLATE_NAME = "Nirnsteel_LootHistory_GamepadEntry"
+local KEYBOARD_STOCK_TEMPLATE_NAME = "ZO_LootHistory_KeyboardEntry"
+local GAMEPAD_STOCK_TEMPLATE_NAME = "ZO_LootHistory_GamepadEntry"
+local PATCH_UPDATE_NAME = "Nirnsteel_UI_LootHistory_WaitForHistory"
 local MAX_PATCH_ATTEMPTS = 80
 local PATCH_RETRY_MS = 250
 local DEFAULT_LOOT_HISTORY_ANCHOR_OFFSET_X = 180
 local DEFAULT_LOOT_HISTORY_ANCHOR_OFFSET_Y = -230
-local STOCK_LOOT_HISTORY_ANCHOR_OFFSET_X = 0
-local STOCK_LOOT_HISTORY_ANCHOR_OFFSET_Y = -84
-local STOCK_LOOT_HISTORY_CONTROL_OFFSET_Y = -95
+local STOCK_KEYBOARD_LOOT_HISTORY_ANCHOR_OFFSET_X = 0
+local STOCK_KEYBOARD_LOOT_HISTORY_ANCHOR_OFFSET_Y = -84
+local STOCK_KEYBOARD_LOOT_HISTORY_CONTROL_OFFSET_Y = -95
+local STOCK_GAMEPAD_LOOT_HISTORY_ANCHOR_OFFSET_X = 0
+local STOCK_GAMEPAD_LOOT_HISTORY_ANCHOR_OFFSET_Y = -120
+local STOCK_GAMEPAD_LOOT_HISTORY_CONTROL_OFFSET_Y = -120
 local LOOT_SOUND_THROTTLE_MS = 90
 local SEQUENTIAL_REVEAL_DELAY_MS = 260
 local LOOT_ENTRY_SPACING_Y = -1
@@ -35,6 +40,30 @@ local QUALITY_STYLE =
 local lastLootSoundMS = -LOOT_SOUND_THROTTLE_MS
 local debugItemId = 900000
 local originalAddXpEntry
+
+local HISTORY_DESCRIPTORS =
+{
+    {
+        key = "Keyboard",
+        templateName = KEYBOARD_TEMPLATE_NAME,
+        stockTemplateName = KEYBOARD_STOCK_TEMPLATE_NAME,
+        getHistory = function() return LOOT_HISTORY_KEYBOARD end,
+        stockPoint = BOTTOMRIGHT,
+        stockAnchorOffsetX = STOCK_KEYBOARD_LOOT_HISTORY_ANCHOR_OFFSET_X,
+        stockAnchorOffsetY = STOCK_KEYBOARD_LOOT_HISTORY_ANCHOR_OFFSET_Y,
+        stockControlOffsetY = STOCK_KEYBOARD_LOOT_HISTORY_CONTROL_OFFSET_Y,
+    },
+    {
+        key = "Gamepad",
+        templateName = GAMEPAD_TEMPLATE_NAME,
+        stockTemplateName = GAMEPAD_STOCK_TEMPLATE_NAME,
+        getHistory = function() return LOOT_HISTORY_GAMEPAD end,
+        stockPoint = BOTTOMLEFT,
+        stockAnchorOffsetX = STOCK_GAMEPAD_LOOT_HISTORY_ANCHOR_OFFSET_X,
+        stockAnchorOffsetY = STOCK_GAMEPAD_LOOT_HISTORY_ANCHOR_OFFSET_Y,
+        stockControlOffsetY = STOCK_GAMEPAD_LOOT_HISTORY_CONTROL_OFFSET_Y,
+    },
+}
 
 local function GetConfiguredRegularLootSound()
     local regularSoundKey = "TRIBUTE_AGENT_HEALED"
@@ -78,8 +107,8 @@ local DEBUG_ITEMS =
 }
 
 local function GetLootHistory()
-    LootHistory:PatchKeyboardHistory()
-    return LOOT_HISTORY_KEYBOARD
+    LootHistory:PatchHistories()
+    return LOOT_HISTORY_KEYBOARD or LOOT_HISTORY_GAMEPAD
 end
 
 local function CreateDebugItemData(name, icon, displayQuality, stackCount)
@@ -230,20 +259,22 @@ local function ApplyVisualStyle(control, data)
         control.glass:SetColor(1, 1, 1, 0.14)
     end
 
-    QueueRarityPulse(control, data)
+    if control.rarityGlow and control.rarityBurst then
+        QueueRarityPulse(control, data)
+    end
 end
 
-local function CopyTemplateBehavior(stream)
+local function CopyTemplateBehavior(stream, templateName, stockTemplateName)
     if not stream or not stream.templates then
         return false
     end
 
-    local stockTemplate = stream.templates[STOCK_TEMPLATE_NAME]
+    local stockTemplate = stream.templates[stockTemplateName]
     if not stockTemplate then
         return false
     end
 
-    if stream.templates[TEMPLATE_NAME] and stream.templates[TEMPLATE_NAME].nirnsteelTemplate then
+    if stream.templates[templateName] and stream.templates[templateName].nirnsteelTemplate then
         return true
     end
 
@@ -262,7 +293,7 @@ local function CopyTemplateBehavior(stream)
         ApplyVisualStyle(control, data)
     end
 
-    stream:AddTemplate(TEMPLATE_NAME, wrappedTemplate)
+    stream:AddTemplate(templateName, wrappedTemplate)
     return true
 end
 
@@ -414,27 +445,27 @@ local function ApplyMoverState()
     mover:SetHidden(not unlocked)
 end
 
-local function RestoreStockHistory(lootHistory)
+local function RestoreStockHistory(lootHistory, descriptor)
     if not lootHistory then
         return
     end
 
-    lootHistory.entryTemplate = STOCK_TEMPLATE_NAME
+    lootHistory.entryTemplate = descriptor.stockTemplateName
     if lootHistory.control then
         lootHistory.control:ClearAnchors()
-        lootHistory.control:SetAnchor(BOTTOMRIGHT, GuiRoot, BOTTOMRIGHT, 0, STOCK_LOOT_HISTORY_CONTROL_OFFSET_Y)
+        lootHistory.control:SetAnchor(descriptor.stockPoint, GuiRoot, descriptor.stockPoint, 0, descriptor.stockControlOffsetY)
     end
 
     if lootHistory.lootStream then
         RestoreSequentialReveal(lootHistory.lootStream)
-        lootHistory.lootStream.anchor = ZO_Anchor:New(BOTTOMRIGHT, GuiRoot, BOTTOMRIGHT, STOCK_LOOT_HISTORY_ANCHOR_OFFSET_X, STOCK_LOOT_HISTORY_ANCHOR_OFFSET_Y)
+        lootHistory.lootStream.anchor = ZO_Anchor:New(descriptor.stockPoint, GuiRoot, descriptor.stockPoint, descriptor.stockAnchorOffsetX, descriptor.stockAnchorOffsetY)
         lootHistory.lootStream:SetAdditionalEntrySpacingY(LOOT_ENTRY_SPACING_Y)
         lootHistory.lootStream:SetContainerShowTime(STOCK_CONTAINER_SHOW_TIME_MS)
     end
 
     if lootHistory.lootStreamPersistent then
         RestoreSequentialReveal(lootHistory.lootStreamPersistent)
-        lootHistory.lootStreamPersistent.anchor = ZO_Anchor:New(BOTTOMRIGHT, GuiRoot, BOTTOMRIGHT, STOCK_LOOT_HISTORY_ANCHOR_OFFSET_X, STOCK_LOOT_HISTORY_ANCHOR_OFFSET_Y)
+        lootHistory.lootStreamPersistent.anchor = ZO_Anchor:New(descriptor.stockPoint, GuiRoot, descriptor.stockPoint, descriptor.stockAnchorOffsetX, descriptor.stockAnchorOffsetY)
         lootHistory.lootStreamPersistent:SetAdditionalEntrySpacingY(LOOT_ENTRY_SPACING_Y)
         lootHistory.lootStreamPersistent:SetContainerShowTime(STOCK_PERSISTENT_CONTAINER_SHOW_TIME_MS)
     end
@@ -442,18 +473,17 @@ local function RestoreStockHistory(lootHistory)
     ApplyMoverState()
 end
 
-function LootHistory:ApplySettings()
-    local lootHistory = LOOT_HISTORY_KEYBOARD
+function LootHistory:ApplySettingsToHistory(lootHistory, descriptor)
     if not lootHistory then
-        return
+        return false
     end
 
     if not IsLootHistoryModuleEnabled() then
-        RestoreStockHistory(lootHistory)
-        return
+        RestoreStockHistory(lootHistory, descriptor)
+        return true
     end
 
-    lootHistory.entryTemplate = TEMPLATE_NAME
+    lootHistory.entryTemplate = descriptor.templateName
     ApplyLootHistoryAnchor(lootHistory)
 
     local position = GetLootHistoryPosition()
@@ -472,10 +502,22 @@ function LootHistory:ApplySettings()
     end
 
     ApplyMoverState()
+    return true
+end
+
+function LootHistory:ApplySettings()
+    local applied = false
+    for _, descriptor in ipairs(HISTORY_DESCRIPTORS) do
+        applied = self:ApplySettingsToHistory(descriptor.getHistory(), descriptor) or applied
+    end
+
+    if applied then
+        ApplyMoverState()
+    end
 end
 
 function LootHistory:RefreshSettings()
-    self:PatchKeyboardHistory()
+    self:PatchHistories()
     self:ApplySettings()
 end
 
@@ -496,19 +538,18 @@ local function InstallExperienceFilter()
     end
 end
 
-function LootHistory:PatchKeyboardHistory()
-    local lootHistory = LOOT_HISTORY_KEYBOARD
+function LootHistory:PatchHistory(lootHistory, descriptor)
     if not lootHistory or lootHistory.nirnsteelPatched then
         return lootHistory and lootHistory.nirnsteelPatched
     end
 
-    local normalPatched = CopyTemplateBehavior(lootHistory.lootStream)
-    local persistentPatched = CopyTemplateBehavior(lootHistory.lootStreamPersistent)
+    local normalPatched = CopyTemplateBehavior(lootHistory.lootStream, descriptor.templateName, descriptor.stockTemplateName)
+    local persistentPatched = CopyTemplateBehavior(lootHistory.lootStreamPersistent, descriptor.templateName, descriptor.stockTemplateName)
     if not normalPatched or not persistentPatched then
         return false
     end
 
-    lootHistory.entryTemplate = TEMPLATE_NAME
+    lootHistory.entryTemplate = descriptor.templateName
     InstallExperienceFilter()
     ApplyLootHistoryAnchor(lootHistory)
 
@@ -525,15 +566,47 @@ function LootHistory:PatchKeyboardHistory()
     end
 
     lootHistory.nirnsteelPatched = true
-    self:ApplySettings()
     return true
+end
+
+function LootHistory:PatchHistories()
+    local allReadyAndPatched = true
+    local patchedAny = false
+
+    for _, descriptor in ipairs(HISTORY_DESCRIPTORS) do
+        local lootHistory = descriptor.getHistory()
+        if lootHistory then
+            local wasPatched = lootHistory.nirnsteelPatched == true
+            if self:PatchHistory(lootHistory, descriptor) then
+                patchedAny = patchedAny or not wasPatched
+            else
+                allReadyAndPatched = false
+            end
+        else
+            allReadyAndPatched = false
+        end
+    end
+
+    if patchedAny then
+        self:ApplySettings()
+    end
+
+    return allReadyAndPatched
+end
+
+function LootHistory:PatchKeyboardHistory()
+    local patched = self:PatchHistory(LOOT_HISTORY_KEYBOARD, HISTORY_DESCRIPTORS[1])
+    if patched then
+        self:ApplySettings()
+    end
+    return patched
 end
 
 function LootHistory:StartPatchWhenReady()
     local attempts = 0
     EVENT_MANAGER:RegisterForUpdate(PATCH_UPDATE_NAME, PATCH_RETRY_MS, function()
         attempts = attempts + 1
-        if self:PatchKeyboardHistory() or attempts >= MAX_PATCH_ATTEMPTS then
+        if self:PatchHistories() or attempts >= MAX_PATCH_ATTEMPTS then
             EVENT_MANAGER:UnregisterForUpdate(PATCH_UPDATE_NAME)
         end
     end)
@@ -541,6 +614,17 @@ end
 
 function Nirnsteel_UI_LootHistory_Entry_OnInitialized(control)
     ZO_LootHistory_Shared_OnInitialized(control)
+    control.rarityGlow = control:GetNamedChild("RarityGlow")
+    control.rarityBurst = control:GetNamedChild("RarityBurst")
+    control.glass = control:GetNamedChild("Glass")
+    control.iconFrame = control:GetNamedChild("IconFrame")
+end
+
+function Nirnsteel_UI_LootHistory_GamepadEntry_OnInitialized(control)
+    ZO_LootHistory_Shared_OnInitialized(control)
+    if ZO_LootHistory_GamepadEntry_OnInitialized then
+        ZO_LootHistory_GamepadEntry_OnInitialized(control)
+    end
     control.rarityGlow = control:GetNamedChild("RarityGlow")
     control.rarityBurst = control:GetNamedChild("RarityBurst")
     control.glass = control:GetNamedChild("Glass")
