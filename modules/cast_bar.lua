@@ -833,10 +833,25 @@ function CastBar:RefreshSettings()
     end
 end
 
-local function RegisterDebugCommands()
-    SLASH_COMMANDS["/nscastbar"] = function()
+local DEBUG_COMMANDS =
+{
+    ["/nscastbar"] = function()
         CastBar:Preview()
+    end,
+}
+
+local function IsDebugModeEnabled()
+    return Nirnsteel_UI.Settings and Nirnsteel_UI.Settings:IsDebugModeEnabled()
+end
+
+local function RegisterDebugCommands()
+    for command, handler in pairs(DEBUG_COMMANDS) do
+        SLASH_COMMANDS[command] = IsDebugModeEnabled() and handler or nil
     end
+end
+
+function CastBar:RefreshDebugCommands()
+    RegisterDebugCommands()
 end
 
 local function OnAddOnLoaded(_, addonName)

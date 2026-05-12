@@ -190,6 +190,7 @@ end
 
 local ACCOUNT_DEFAULTS =
 {
+    debugMode = false,
     modules =
     {
         lootHistory =
@@ -656,6 +657,29 @@ end
 
 function Settings:GetResourceBarsPosition()
     return self.server.modules.resourceBars
+end
+
+function Settings:IsDebugModeEnabled()
+    return self.account and self.account.debugMode == true
+end
+
+function Settings:SetDebugModeEnabled(value)
+    self.account.debugMode = value == true
+
+    local modules =
+    {
+        Nirnsteel_UI.LootHistory,
+        Nirnsteel_UI.DamageNumbers,
+        Nirnsteel_UI.ExperienceTracker,
+        Nirnsteel_UI.ResourceBars,
+        Nirnsteel_UI.CastBar,
+    }
+
+    for _, module in ipairs(modules) do
+        if module and module.RefreshDebugCommands then
+            module:RefreshDebugCommands()
+        end
+    end
 end
 
 function Settings:IsLootHistoryEnabled()
@@ -2587,6 +2611,14 @@ function Settings:RegisterAddonMenu()
                     default = ACCOUNT_DEFAULTS.modules.resourceBars.shieldTextMode,
                 },
             },
+        },
+        {
+            type = "checkbox",
+            name = "Debug Mode",
+            tooltip = "Registers slash commands for testing addon modules.",
+            getFunc = function() return self:IsDebugModeEnabled() end,
+            setFunc = function(value) self:SetDebugModeEnabled(value) end,
+            default = ACCOUNT_DEFAULTS.debugMode,
         },
     }
 

@@ -707,22 +707,34 @@ function DamageNumbers:DebugStorm()
     end
 end
 
-local function RegisterDebugCommands()
-    SLASH_COMMANDS["/nsdmg"] = function()
+local DEBUG_COMMANDS =
+{
+    ["/nsdmg"] = function()
         DamageNumbers:DebugNormal()
-    end
-
-    SLASH_COMMANDS["/nsdmgcrit"] = function()
+    end,
+    ["/nsdmgcrit"] = function()
         DamageNumbers:DebugCrit()
-    end
-
-    SLASH_COMMANDS["/nsdmgsound"] = function()
+    end,
+    ["/nsdmgsound"] = function()
         DamageNumbers:DebugSound()
-    end
-
-    SLASH_COMMANDS["/nsdmgstorm"] = function()
+    end,
+    ["/nsdmgstorm"] = function()
         DamageNumbers:DebugStorm()
+    end,
+}
+
+local function IsDebugModeEnabled()
+    return Nirnsteel_UI.Settings and Nirnsteel_UI.Settings:IsDebugModeEnabled()
+end
+
+local function RegisterDebugCommands()
+    for command, handler in pairs(DEBUG_COMMANDS) do
+        SLASH_COMMANDS[command] = IsDebugModeEnabled() and handler or nil
     end
+end
+
+function DamageNumbers:RefreshDebugCommands()
+    RegisterDebugCommands()
 end
 
 local function OnAddOnLoaded(_, addonName)

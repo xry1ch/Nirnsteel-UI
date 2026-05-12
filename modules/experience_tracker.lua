@@ -1601,16 +1601,31 @@ function ExperienceTracker:RefreshSettings()
     self:UpdateVisibility()
 end
 
-local function RegisterDebugCommands()
-    SLASH_COMMANDS["/nsxp"] = function()
+local DEBUG_COMMANDS =
+{
+    ["/nsxp"] = function()
         ExperienceTracker:PreviewGain()
-    end
-    SLASH_COMMANDS["/nsxpbig"] = function()
+    end,
+    ["/nsxpbig"] = function()
         ExperienceTracker:PreviewBigGain()
-    end
-    SLASH_COMMANDS["/nsxpcp"] = function()
+    end,
+    ["/nsxpcp"] = function()
         ExperienceTracker:PreviewCPGain()
+    end,
+}
+
+local function IsDebugModeEnabled()
+    return Nirnsteel_UI.Settings and Nirnsteel_UI.Settings:IsDebugModeEnabled()
+end
+
+local function RegisterDebugCommands()
+    for command, handler in pairs(DEBUG_COMMANDS) do
+        SLASH_COMMANDS[command] = IsDebugModeEnabled() and handler or nil
     end
+end
+
+function ExperienceTracker:RefreshDebugCommands()
+    RegisterDebugCommands()
 end
 
 local function OnAddOnLoaded(_, addonName)

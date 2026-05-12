@@ -156,14 +156,28 @@ function LootHistory:PreviewRegularSound()
     PlaySound(GetConfiguredRegularLootSound())
 end
 
-local function RegisterDebugCommands()
-    SLASH_COMMANDS["/nslootlegendary"] = function()
+local DEBUG_COMMANDS =
+{
+    ["/nslootlegendary"] = function()
         LootHistory:DebugLegendary()
-    end
-
-    SLASH_COMMANDS["/nslootmix"] = function()
+    end,
+    ["/nslootmix"] = function()
         LootHistory:DebugMixedItems()
+    end,
+}
+
+local function IsDebugModeEnabled()
+    return Nirnsteel_UI.Settings and Nirnsteel_UI.Settings:IsDebugModeEnabled()
+end
+
+local function RegisterDebugCommands()
+    for command, handler in pairs(DEBUG_COMMANDS) do
+        SLASH_COMMANDS[command] = IsDebugModeEnabled() and handler or nil
     end
+end
+
+function LootHistory:RefreshDebugCommands()
+    RegisterDebugCommands()
 end
 
 local function GetLootHistoryPosition()

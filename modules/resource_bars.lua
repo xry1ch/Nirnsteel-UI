@@ -1502,14 +1502,29 @@ function ResourceBars:RefreshSettings()
     end
 end
 
-local function RegisterDebugCommands()
-    SLASH_COMMANDS["/nsbars"] = function()
+local DEBUG_COMMANDS =
+{
+    ["/nsbars"] = function()
         ResourceBars:RefreshPowerValues(true)
         ResourceBars:ApplyLayout()
-    end
-    SLASH_COMMANDS["/nsbarsfeedback"] = function()
+    end,
+    ["/nsbarsfeedback"] = function()
         ResourceBars:PreviewFeedback()
+    end,
+}
+
+local function IsDebugModeEnabled()
+    return Nirnsteel_UI.Settings and Nirnsteel_UI.Settings:IsDebugModeEnabled()
+end
+
+local function RegisterDebugCommands()
+    for command, handler in pairs(DEBUG_COMMANDS) do
+        SLASH_COMMANDS[command] = IsDebugModeEnabled() and handler or nil
     end
+end
+
+function ResourceBars:RefreshDebugCommands()
+    RegisterDebugCommands()
 end
 
 local function OnAddOnLoaded(_, addonName)
