@@ -89,6 +89,84 @@ local function MarkSliderOptionsNoMouseWheel(options)
     end
 end
 
+local CAMERA_PROFILE_DEFAULTS =
+{
+    horizontalLookSpeed = 0.85,
+    verticalLookSpeed = 0.85,
+    fieldOfView = 50,
+    horizontalPosition = 1,
+    horizontalOffset = 0,
+    verticalOffset = 0,
+}
+
+local ADVENTURE_CAMERA_DISPLAY_SETTINGS =
+{
+    horizontalLookSpeed = { rawMin = 0.1, rawMax = 1.6, displayMin = 0, displayMax = 100 },
+    verticalLookSpeed = { rawMin = 0.1, rawMax = 1.6, displayMin = 0, displayMax = 100 },
+    fieldOfView = { rawMin = 35, rawMax = 65, displayMin = 70, displayMax = 130 },
+    horizontalPosition = { rawMin = -1, rawMax = 1, displayMin = -100, displayMax = 100 },
+    horizontalOffset = { rawMin = -1, rawMax = 1, displayMin = -100, displayMax = 100 },
+    verticalOffset = { rawMin = -0.3, rawMax = 0.5, displayMin = -60, displayMax = 100 },
+}
+
+local ADVENTURE_CAMERA_SETTING_IDS =
+{
+    horizontalLookSpeed = CAMERA_SETTING_SENSITIVITY_THIRD_PERSON_X,
+    verticalLookSpeed = CAMERA_SETTING_SENSITIVITY_THIRD_PERSON_Y,
+    fieldOfView = CAMERA_SETTING_THIRD_PERSON_FIELD_OF_VIEW,
+    horizontalPosition = CAMERA_SETTING_THIRD_PERSON_HORIZONTAL_POSITION_MULTIPLIER,
+    horizontalOffset = CAMERA_SETTING_THIRD_PERSON_HORIZONTAL_OFFSET,
+    verticalOffset = CAMERA_SETTING_THIRD_PERSON_VERTICAL_OFFSET,
+}
+
+local function ClampNumber(value, minValue, maxValue)
+    value = tonumber(value) or minValue
+    return math.min(math.max(value, minValue), maxValue)
+end
+
+local function RawCameraValueToDisplay(key, rawValue)
+    local display = ADVENTURE_CAMERA_DISPLAY_SETTINGS[key]
+    if not display then
+        return rawValue
+    end
+
+    rawValue = ClampNumber(rawValue, display.rawMin, display.rawMax)
+    local percent = (rawValue - display.rawMin) / (display.rawMax - display.rawMin)
+    return zo_round(display.displayMin + ((display.displayMax - display.displayMin) * percent))
+end
+
+local function DisplayCameraValueToRaw(key, displayValue)
+    local display = ADVENTURE_CAMERA_DISPLAY_SETTINGS[key]
+    if not display then
+        return displayValue
+    end
+
+    displayValue = ClampNumber(displayValue, display.displayMin, display.displayMax)
+    local percent = (displayValue - display.displayMin) / (display.displayMax - display.displayMin)
+    return display.rawMin + ((display.rawMax - display.rawMin) * percent)
+end
+
+local function CopyCameraProfile(profile)
+    local copy = {}
+    profile = profile or CAMERA_PROFILE_DEFAULTS
+
+    for key, defaultValue in pairs(CAMERA_PROFILE_DEFAULTS) do
+        copy[key] = tonumber(profile[key]) or defaultValue
+    end
+
+    return copy
+end
+
+local function ReadCurrentCameraProfile()
+    local profile = {}
+
+    for key, settingId in pairs(ADVENTURE_CAMERA_SETTING_IDS) do
+        profile[key] = tonumber(GetSetting(SETTING_TYPE_CAMERA, settingId)) or CAMERA_PROFILE_DEFAULTS[key]
+    end
+
+    return profile
+end
+
 local ACCOUNT_DEFAULTS =
 {
     modules =
@@ -130,6 +208,14 @@ local ACCOUNT_DEFAULTS =
             enabled = true,
             skillUseShrinkEnabled = true,
             globalCooldownEnabled = true,
+        },
+        adventureCamera =
+        {
+            enabled = false,
+            initialized = false,
+            transitionMS = 600,
+            actionProfile = CAMERA_PROFILE_DEFAULTS,
+            adventureProfile = CAMERA_PROFILE_DEFAULTS,
         },
         castBar =
         {
@@ -478,6 +564,10 @@ function Settings:GetActionBarFrames()
     return self.account.modules.actionBarFrames
 end
 
+function Settings:GetAdventureCamera()
+    return self.account.modules.adventureCamera
+end
+
 function Settings:GetCastBar()
     return self.account.modules.castBar
 end
@@ -671,6 +761,70 @@ function Settings:SetActionBarGlobalCooldownEnabled(value)
     self:GetActionBarFrames().globalCooldownEnabled = value
     if Nirnsteel_UI.ActionBarFrames then
         Nirnsteel_UI.ActionBarFrames:RefreshSettings()
+    end
+end
+
+function Settings:IsAdventureCameraEnabled()
+    return self:GetAdventureCamera().enabled
+end
+
+function Settings:InitializeAdventureCameraProfilesIfNeeded()
+    local settings = self:GetAdventureCamera()
+    if settings.initialized then
+        return
+    end
+
+    local currentProfile = ReadCurrentCameraProfile()
+    settings.actionProfile = CopyCameraProfile(currentProfile)
+    settings.adventureProfile = CopyCameraProfile(currentProfile)
+    settings.initialized = true
+end
+
+function Settings:SetAdventureCameraEnabled(value)
+    if value then
+        self:InitializeAdventureCameraProfilesIfNeeded()
+    end
+
+    self:GetAdventureCamera().enabled = value
+    if Nirnsteel_UI.AdventureCamera then
+        Nirnsteel_UI.AdventureCamera:RefreshSettings()
+    end
+end
+
+function Settings:SetAdventureCameraValue(key, value)
+    self:GetAdventureCamera()[key] = value
+    if Nirnsteel_UI.AdventureCamera then
+        Nirnsteel_UI.AdventureCamera:RefreshSettings()
+    end
+end
+
+function Settings:GetAdventureCameraDisplayValue(key)
+    local settings = self:GetAdventureCamera()
+    local profile = settings.adventureProfile or CAMERA_PROFILE_DEFAULTS
+    return RawCameraValueToDisplay(key, profile[key] or CAMERA_PROFILE_DEFAULTS[key])
+end
+
+function Settings:SetAdventureCameraDisplayValue(key, value)
+    local settings = self:GetAdventureCamera()
+    settings.adventureProfile = settings.adventureProfile or CopyCameraProfile(CAMERA_PROFILE_DEFAULTS)
+    settings.adventureProfile[key] = DisplayCameraValueToRaw(key, value)
+
+    if Nirnsteel_UI.AdventureCamera then
+        Nirnsteel_UI.AdventureCamera:RefreshSettings()
+    end
+end
+
+function Settings:CaptureAdventureCameraActionProfile()
+    local settings = self:GetAdventureCamera()
+    local currentProfile = ReadCurrentCameraProfile()
+    settings.actionProfile = CopyCameraProfile(currentProfile)
+    if not settings.initialized then
+        settings.adventureProfile = CopyCameraProfile(currentProfile)
+    end
+    settings.initialized = true
+
+    if Nirnsteel_UI.AdventureCamera then
+        Nirnsteel_UI.AdventureCamera:RefreshSettings()
     end
 end
 
@@ -1346,6 +1500,114 @@ function Settings:RegisterAddonMenu()
                     setFunc = function(value) self:SetActionBarGlobalCooldownEnabled(value) end,
                     disabled = function() return not self:IsActionBarFramesEnabled() end,
                     default = ACCOUNT_DEFAULTS.modules.actionBarFrames.globalCooldownEnabled,
+                },
+            },
+        },
+        {
+            type = "submenu",
+            name = "Adventure Camera",
+            tooltip = "Applies a separate third-person camera profile out of combat and restores your action camera in combat.",
+            controls =
+            {
+                {
+                    type = "description",
+                    text = "Adventure Camera keeps two profiles for the same ESO third-person camera settings. The first time you enable it, your current camera is copied into both profiles so nothing jumps. Out of combat, the Adventure Camera sliders are applied. In combat, the captured Action Camera profile is restored. Use the capture button after changing ESO's camera settings to update the Action Camera profile. When disabled, the addon stops transitioning and restores the captured Action Camera values.",
+                },
+                {
+                    type = "checkbox",
+                    name = "Enable Adventure Camera Module",
+                    tooltip = "Uses the Adventure Camera profile out of combat and the captured Action Camera profile in combat.",
+                    getFunc = function() return self:IsAdventureCameraEnabled() end,
+                    setFunc = function(value) self:SetAdventureCameraEnabled(value) end,
+                    default = ACCOUNT_DEFAULTS.modules.adventureCamera.enabled,
+                },
+                {
+                    type = "slider",
+                    name = "Transition Duration",
+                    tooltip = "Milliseconds used to transition between Adventure Camera and Action Camera.",
+                    min = 0,
+                    max = 3000,
+                    step = 50,
+                    getFunc = function() return self:GetAdventureCamera().transitionMS end,
+                    setFunc = function(value) self:SetAdventureCameraValue("transitionMS", value) end,
+                    disabled = function() return not self:IsAdventureCameraEnabled() end,
+                    default = ACCOUNT_DEFAULTS.modules.adventureCamera.transitionMS,
+                },
+                {
+                    type = "button",
+                    name = "Capture Current as Action Camera",
+                    tooltip = "Stores the current ESO third-person camera settings as the in-combat Action Camera profile.",
+                    func = function() self:CaptureAdventureCameraActionProfile() end,
+                },
+                {
+                    type = "header",
+                    name = "Adventure Camera",
+                },
+                {
+                    type = "slider",
+                    name = "Horizontal Look Speed",
+                    min = 0,
+                    max = 100,
+                    step = 1,
+                    getFunc = function() return self:GetAdventureCameraDisplayValue("horizontalLookSpeed") end,
+                    setFunc = function(value) self:SetAdventureCameraDisplayValue("horizontalLookSpeed", value) end,
+                    disabled = function() return not self:IsAdventureCameraEnabled() end,
+                    default = RawCameraValueToDisplay("horizontalLookSpeed", ACCOUNT_DEFAULTS.modules.adventureCamera.adventureProfile.horizontalLookSpeed),
+                },
+                {
+                    type = "slider",
+                    name = "Vertical Look Speed",
+                    min = 0,
+                    max = 100,
+                    step = 1,
+                    getFunc = function() return self:GetAdventureCameraDisplayValue("verticalLookSpeed") end,
+                    setFunc = function(value) self:SetAdventureCameraDisplayValue("verticalLookSpeed", value) end,
+                    disabled = function() return not self:IsAdventureCameraEnabled() end,
+                    default = RawCameraValueToDisplay("verticalLookSpeed", ACCOUNT_DEFAULTS.modules.adventureCamera.adventureProfile.verticalLookSpeed),
+                },
+                {
+                    type = "slider",
+                    name = "Field of View",
+                    min = 70,
+                    max = 130,
+                    step = 1,
+                    getFunc = function() return self:GetAdventureCameraDisplayValue("fieldOfView") end,
+                    setFunc = function(value) self:SetAdventureCameraDisplayValue("fieldOfView", value) end,
+                    disabled = function() return not self:IsAdventureCameraEnabled() end,
+                    default = RawCameraValueToDisplay("fieldOfView", ACCOUNT_DEFAULTS.modules.adventureCamera.adventureProfile.fieldOfView),
+                },
+                {
+                    type = "slider",
+                    name = "Horizontal Position",
+                    min = -100,
+                    max = 100,
+                    step = 1,
+                    getFunc = function() return self:GetAdventureCameraDisplayValue("horizontalPosition") end,
+                    setFunc = function(value) self:SetAdventureCameraDisplayValue("horizontalPosition", value) end,
+                    disabled = function() return not self:IsAdventureCameraEnabled() end,
+                    default = RawCameraValueToDisplay("horizontalPosition", ACCOUNT_DEFAULTS.modules.adventureCamera.adventureProfile.horizontalPosition),
+                },
+                {
+                    type = "slider",
+                    name = "Horizontal Offset",
+                    min = -100,
+                    max = 100,
+                    step = 1,
+                    getFunc = function() return self:GetAdventureCameraDisplayValue("horizontalOffset") end,
+                    setFunc = function(value) self:SetAdventureCameraDisplayValue("horizontalOffset", value) end,
+                    disabled = function() return not self:IsAdventureCameraEnabled() end,
+                    default = RawCameraValueToDisplay("horizontalOffset", ACCOUNT_DEFAULTS.modules.adventureCamera.adventureProfile.horizontalOffset),
+                },
+                {
+                    type = "slider",
+                    name = "Vertical Offset",
+                    min = -60,
+                    max = 100,
+                    step = 1,
+                    getFunc = function() return self:GetAdventureCameraDisplayValue("verticalOffset") end,
+                    setFunc = function(value) self:SetAdventureCameraDisplayValue("verticalOffset", value) end,
+                    disabled = function() return not self:IsAdventureCameraEnabled() end,
+                    default = RawCameraValueToDisplay("verticalOffset", ACCOUNT_DEFAULTS.modules.adventureCamera.adventureProfile.verticalOffset),
                 },
             },
         },

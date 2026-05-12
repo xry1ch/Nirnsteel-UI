@@ -8,6 +8,7 @@
 
 ui/loot_history.xml
 modules/settings.lua
+modules/adventure_camera.lua
 modules/experience_tracker.lua
 modules/resource_bars.lua
 modules/cast_bar.lua
