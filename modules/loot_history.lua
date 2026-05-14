@@ -1,6 +1,7 @@
 local ADDON_NAME = "NirnsteelUI"
 
 Nirnsteel_UI = Nirnsteel_UI or {}
+local Nirnsteel_UI = Nirnsteel_UI
 local LootHistory = {}
 Nirnsteel_UI.LootHistory = LootHistory
 

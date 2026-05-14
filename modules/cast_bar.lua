@@ -2,6 +2,7 @@ local ADDON_NAME = "NirnsteelUI"
 local EVENT_NAMESPACE = ADDON_NAME .. "_CastBar"
 
 Nirnsteel_UI = Nirnsteel_UI or {}
+local Nirnsteel_UI = Nirnsteel_UI
 local CastBar = {}
 Nirnsteel_UI.CastBar = CastBar
 

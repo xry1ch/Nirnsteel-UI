@@ -2,6 +2,7 @@ local ADDON_NAME = "NirnsteelUI"
 local EVENT_NAMESPACE = ADDON_NAME .. "_Compass"
 
 Nirnsteel_UI = Nirnsteel_UI or {}
+local Nirnsteel_UI = Nirnsteel_UI
 local CompassModule = {}
 Nirnsteel_UI.Compass = CompassModule
 
@@ -21,6 +22,10 @@ local GAMEPAD_RIGHT_COORDS = { 0.4375, 0, 0, 0.75 }
 
 local function IsModuleEnabled()
     return not Nirnsteel_UI.Settings or Nirnsteel_UI.Settings:IsCompassEnabled()
+end
+
+local function ShouldHideCompass()
+    return Nirnsteel_UI.Settings and Nirnsteel_UI.Settings:ShouldHardcoreHideCompass()
 end
 
 local function ApplyTextureCoords(control, coords)
@@ -63,7 +68,7 @@ end
 
 function CompassModule:ApplyNirnsteelStyle()
     local frame = ZO_CompassFrame
-    if not frame or not IsModuleEnabled() then
+    if not frame or not IsModuleEnabled() or ShouldHideCompass() then
         return
     end
 
@@ -118,6 +123,14 @@ function CompassModule:ApplyStockStyle()
 end
 
 function CompassModule:Apply()
+    if COMPASS_FRAME and COMPASS_FRAME.SetCompassHidden then
+        COMPASS_FRAME:SetCompassHidden(ShouldHideCompass() == true)
+    end
+
+    if ShouldHideCompass() then
+        return
+    end
+
     if IsModuleEnabled() then
         self:ApplyNirnsteelStyle()
     else
@@ -139,7 +152,7 @@ function CompassModule:InstallHooks()
     COMPASS_FRAME.ApplyStyle = function(frame, ...)
         local result = originalApplyStyle(frame, ...)
         if not CompassModule.restoringStockStyle then
-            CompassModule:ApplyNirnsteelStyle()
+            CompassModule:Apply()
         end
         return result
     end

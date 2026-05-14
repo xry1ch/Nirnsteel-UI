@@ -2,6 +2,7 @@ local ADDON_NAME = "NirnsteelUI"
 local EVENT_NAMESPACE = ADDON_NAME .. "_KillSound"
 
 Nirnsteel_UI = Nirnsteel_UI or {}
+local Nirnsteel_UI = Nirnsteel_UI
 local KillSound = {}
 Nirnsteel_UI.KillSound = KillSound
 

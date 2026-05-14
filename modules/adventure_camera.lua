@@ -3,6 +3,7 @@ local EVENT_NAMESPACE = ADDON_NAME .. "_AdventureCamera"
 local UPDATE_NAMESPACE = EVENT_NAMESPACE .. "_Transition"
 
 Nirnsteel_UI = Nirnsteel_UI or {}
+local Nirnsteel_UI = Nirnsteel_UI
 local AdventureCamera = {}
 Nirnsteel_UI.AdventureCamera = AdventureCamera
 

@@ -2,6 +2,7 @@ local ADDON_NAME = "NirnsteelUI"
 local EVENT_NAMESPACE = ADDON_NAME .. "_ExperienceTracker"
 
 Nirnsteel_UI = Nirnsteel_UI or {}
+local Nirnsteel_UI = Nirnsteel_UI
 local ExperienceTracker = {}
 Nirnsteel_UI.ExperienceTracker = ExperienceTracker
 

@@ -2,6 +2,7 @@ local ADDON_NAME = "NirnsteelUI"
 local EVENT_NAMESPACE = ADDON_NAME .. "_ActionBarFrames"
 
 Nirnsteel_UI = Nirnsteel_UI or {}
+local Nirnsteel_UI = Nirnsteel_UI
 local ActionBarFrames = {}
 Nirnsteel_UI.ActionBarFrames = ActionBarFrames
 
@@ -256,33 +257,27 @@ function ActionBarFrames:RefreshAssignableActionBars()
 end
 
 local function WrapActionButtonMethod(methodName)
-    if not ActionButton or ActionButton["NirnsteelOriginal" .. methodName] then
+    if not ActionButton or ActionButton["NirnsteelHooked" .. methodName] then
         return
     end
 
-    local original = ActionButton[methodName]
-    if not original then
-        return
-    end
-
-    ActionButton["NirnsteelOriginal" .. methodName] = original
-    ActionButton[methodName] = function(button, ...)
-        local result = original(button, ...)
+    if not ZO_PostHook or not ZO_PostHook(ActionButton, methodName, function(button, ...)
         ActionBarFrames:ApplyToButton(button)
-        return result
+    end) then
+        return
     end
+
+    ActionButton["NirnsteelHooked" .. methodName] = true
 end
 
 function ActionBarFrames:InstallActionSlotHooks()
-    if self.actionSlotHooksInstalled or not ZO_ActionSlot_SetupSlot or not ZO_ActionSlot_ClearSlot then
+    if self.actionSlotHooksInstalled or not ZO_PreHook or not ZO_ActionSlot_SetupSlot or not ZO_ActionSlot_ClearSlot then
         return
     end
 
-    self.originalSetupSlot = ZO_ActionSlot_SetupSlot
-    self.originalClearSlot = ZO_ActionSlot_ClearSlot
-
-    ZO_ActionSlot_SetupSlot = function(iconControl, buttonControl, icon, normalFrame, downFrame, cooldownIconControl, mouseOverTexture)
-        return ActionBarFrames.originalSetupSlot(
+    local originalSetupSlot
+    originalSetupSlot = ZO_PreHook("ZO_ActionSlot_SetupSlot", function(iconControl, buttonControl, icon, normalFrame, downFrame, cooldownIconControl, mouseOverTexture)
+        originalSetupSlot(
             iconControl,
             buttonControl,
             icon,
@@ -291,10 +286,12 @@ function ActionBarFrames:InstallActionSlotHooks()
             cooldownIconControl,
             mouseOverTexture
         )
-    end
+        return true
+    end)
 
-    ZO_ActionSlot_ClearSlot = function(iconControl, buttonControl, normalFrame, downFrame, cooldownIconControl, mouseOverTexture)
-        return ActionBarFrames.originalClearSlot(
+    local originalClearSlot
+    originalClearSlot = ZO_PreHook("ZO_ActionSlot_ClearSlot", function(iconControl, buttonControl, normalFrame, downFrame, cooldownIconControl, mouseOverTexture)
+        originalClearSlot(
             iconControl,
             buttonControl,
             GetSetupNormalFrame(normalFrame),
@@ -302,9 +299,10 @@ function ActionBarFrames:InstallActionSlotHooks()
             cooldownIconControl,
             mouseOverTexture
         )
-    end
+        return true
+    end)
 
-    self.actionSlotHooksInstalled = true
+    self.actionSlotHooksInstalled = originalSetupSlot and originalClearSlot
 end
 
 function ActionBarFrames:InstallHooks()

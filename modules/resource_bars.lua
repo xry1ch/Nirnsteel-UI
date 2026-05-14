@@ -2,6 +2,7 @@ local ADDON_NAME = "NirnsteelUI"
 local EVENT_NAMESPACE = ADDON_NAME .. "_ResourceBars"
 
 Nirnsteel_UI = Nirnsteel_UI or {}
+local Nirnsteel_UI = Nirnsteel_UI
 local ResourceBars = {}
 Nirnsteel_UI.ResourceBars = ResourceBars
 
@@ -229,6 +230,14 @@ end
 
 local function IsModuleEnabled()
     return not Nirnsteel_UI.Settings or Nirnsteel_UI.Settings:IsResourceBarsEnabled()
+end
+
+local function ShouldHideHealthResourceBar()
+    return Nirnsteel_UI.Settings and Nirnsteel_UI.Settings:ShouldHardcoreHideHealthResourceBar()
+end
+
+local function ShouldShowResourceBarKey(key)
+    return key ~= "health" or not ShouldHideHealthResourceBar()
 end
 
 local function IsModuleUnlocked()
@@ -913,19 +922,21 @@ end
 function ResourceBars:ComputeLayoutMetrics()
     local barHeight = GetConfiguredBarHeight()
     local rowGap = GetRowSpacing()
+    local hideHealth = ShouldHideHealthResourceBar()
     local colGap = GetColumnSpacing()
     local healthWidth = ClampNumber(GetSettingValue("rowHealthWidth"), MIN_HEALTH_WIDTH, MAX_ROW_WIDTH)
     local magickaWidth = ClampNumber(GetSettingValue("rowMagickaWidth"), MIN_RESOURCE_WIDTH, MAX_ROW_WIDTH)
     local staminaWidth = ClampNumber(GetSettingValue("rowStaminaWidth"), MIN_RESOURCE_WIDTH, MAX_ROW_WIDTH)
     local pyramidGap = colGap
     local bottomTotalWidth = magickaWidth + staminaWidth + pyramidGap
-    local layoutWidth = math.max(healthWidth, bottomTotalWidth)
+    local layoutWidth = hideHealth and bottomTotalWidth or math.max(healthWidth, bottomTotalWidth)
 
     return {
         barHeight = barHeight,
         width = layoutWidth,
-        height = (barHeight * 2) + rowGap,
+        height = hideHealth and barHeight or (barHeight * 2) + rowGap,
         rowGap = rowGap,
+        hideHealth = hideHealth,
         pyramid = {
             healthWidth = healthWidth,
             magickaWidth = magickaWidth,
@@ -983,26 +994,33 @@ function ResourceBars:ApplyLayoutGeometry()
     local stamina = self.bars.stamina
     local healthCenterX = 0
 
+    health:SetHidden(metrics.hideHealth)
     health:SetDimensions(p.healthWidth, metrics.barHeight)
     self:UpdateLabelLayout(health, p.healthWidth, metrics.barHeight)
     health:ClearAnchors()
     health:SetAnchor(TOP, root, TOP, healthCenterX, 0)
 
+    local resourceRowY = metrics.hideHealth and 0 or metrics.barHeight + metrics.rowGap
+
+    magicka:SetHidden(false)
     magicka:SetDimensions(p.magickaWidth, metrics.barHeight)
     self:UpdateLabelLayout(magicka, p.magickaWidth, metrics.barHeight)
     magicka:ClearAnchors()
-    magicka:SetAnchor(TOP, root, TOP, healthCenterX - ((p.staminaWidth + p.gap) * 0.5), metrics.barHeight + metrics.rowGap)
+    magicka:SetAnchor(TOP, root, TOP, healthCenterX - ((p.staminaWidth + p.gap) * 0.5), resourceRowY)
 
+    stamina:SetHidden(false)
     stamina:SetDimensions(p.staminaWidth, metrics.barHeight)
     self:UpdateLabelLayout(stamina, p.staminaWidth, metrics.barHeight)
     stamina:ClearAnchors()
-    stamina:SetAnchor(TOP, root, TOP, healthCenterX + ((p.magickaWidth + p.gap) * 0.5), metrics.barHeight + metrics.rowGap)
+    stamina:SetAnchor(TOP, root, TOP, healthCenterX + ((p.magickaWidth + p.gap) * 0.5), resourceRowY)
 
     for _, key in ipairs(BAR_ORDER) do
         local state = self.state and self.state[key]
         if state then
-            self:UpdatePatternOverlay(self.bars[key], state.current or 0, state.maximum or 0)
-            if ShouldShowFeedback() then
+            if ShouldShowResourceBarKey(key) then
+                self:UpdatePatternOverlay(self.bars[key], state.current or 0, state.maximum or 0)
+            end
+            if ShouldShowResourceBarKey(key) and ShouldShowFeedback() then
                 self:UpdateLowResourceFeedback(self.bars[key], key, state.current or 0, state.maximum or 0)
             else
                 HideFrameFeedback(self.bars[key])
@@ -1039,9 +1057,10 @@ function ResourceBars:SetStockPlayerBarsHidden(hidden)
         local health = ZO_PlayerAttribute:GetNamedChild("Health")
         local magicka = ZO_PlayerAttribute:GetNamedChild("Magicka")
         local stamina = ZO_PlayerAttribute:GetNamedChild("Stamina")
+        local hideHealth = hidden or ShouldHideHealthResourceBar()
 
         if health then
-            health:SetHidden(hidden)
+            health:SetHidden(hideHealth)
         end
         if magicka then
             magicka:SetHidden(hidden)
@@ -1081,7 +1100,7 @@ function ResourceBars:UpdateVisibility()
     local shouldShow = false
     for _, key in ipairs(BAR_ORDER) do
         local state = self.state and self.state[key]
-        if state and ShouldShowResource(state.current, state.effectiveMax, state.fadeUntilMS) then
+        if ShouldShowResourceBarKey(key) and state and ShouldShowResource(state.current, state.effectiveMax, state.fadeUntilMS) then
             shouldShow = true
             break
         end
@@ -1365,7 +1384,7 @@ function ResourceBars:PreviewFeedback()
 
     for index, key in ipairs(BAR_ORDER) do
         local frame = self.bars and self.bars[key]
-        if frame then
+        if frame and ShouldShowResourceBarKey(key) then
             zo_callLater(function()
                 self:PlayResourcePulse(frame, key, "gain", 0.18)
             end, (index - 1) * 180)

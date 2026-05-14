@@ -3,71 +3,12 @@ local ADDON_DISPLAY_NAME = "NirnSteel UI"
 local SAVED_VARS_VERSION = 1
 
 Nirnsteel_UI = Nirnsteel_UI or {}
+local Nirnsteel_UI = Nirnsteel_UI
 
 local Settings = {}
 Nirnsteel_UI.Settings = Settings
 
-local LAM_SLIDER_HANDLER_NAMESPACE = "LAM2_Slider"
-
-local function ClearLamSliderMouseWheel(control)
-    if not control then
-        return
-    end
-
-    if control.slider then
-        control.slider:SetHandler("OnMouseWheel", nil, LAM_SLIDER_HANDLER_NAMESPACE)
-    end
-
-    if control.slidervalue then
-        control.slidervalue:SetHandler("OnFocusGained", nil, LAM_SLIDER_HANDLER_NAMESPACE)
-        control.slidervalue:SetHandler("OnFocusLost", nil, LAM_SLIDER_HANDLER_NAMESPACE)
-        control.slidervalue:SetHandler("OnMouseWheel", nil, LAM_SLIDER_HANDLER_NAMESPACE)
-    end
-end
-
-local function DisableLamSliderMouseWheelSupport()
-    if not LAMCreateControl or not LAMCreateControl.slider or LAMCreateControl.nirnsteelNoMouseWheelSliders then
-        return
-    end
-
-    local originalSliderFactory = LAMCreateControl.slider
-    LAMCreateControl.nirnsteelNoMouseWheelSliders = true
-
-    LAMCreateControl.slider = function(parent, sliderData, controlName)
-        if not sliderData or not sliderData.nirnsteelDisableMouseWheel then
-            return originalSliderFactory(parent, sliderData, controlName)
-        end
-
-        local ok, control = xpcall(function()
-            return originalSliderFactory(parent, sliderData, controlName)
-        end, function(errorMessage)
-            return errorMessage
-        end)
-
-        if not ok then
-            error(control)
-        end
-
-        ClearLamSliderMouseWheel(control)
-        return control
-    end
-end
-
-local function MarkSliderOptionsNoMouseWheel(options)
-    if not options then
-        return
-    end
-
-    for _, option in ipairs(options) do
-        if option.type == "slider" then
-            option.nirnsteelDisableMouseWheel = true
-        end
-
-        if option.controls then
-            MarkSliderOptionsNoMouseWheel(option.controls)
-        end
-    end
-end
+local PROFILE_MIGRATION_VERSION = 1
 
 local CAMERA_PROFILE_DEFAULTS =
 {
@@ -366,15 +307,21 @@ local SERVER_DEFAULTS =
     },
 }
 
+local SERVER_PROFILE_DEFAULTS = SERVER_DEFAULTS.servers["*"]
+
+local CHARACTER_DEFAULTS =
+{
+    hardcoreSupport =
+    {
+        hideCompass = false,
+        hideHealthResourceBar = false,
+    },
+}
+
 local function GetServerKey()
     local worldName = GetWorldName()
     if worldName and worldName ~= "" then
         return worldName
-    end
-
-    local lastRealm = GetCVar("LastRealm")
-    if lastRealm and lastRealm ~= "" then
-        return lastRealm
     end
 
     return "Default"
@@ -391,6 +338,65 @@ local function CopyDefaults(target, defaults)
             target[key] = value
         end
     end
+end
+
+local function CopySavedValues(target, source, defaults)
+    if type(target) ~= "table" or type(source) ~= "table" or type(defaults) ~= "table" then
+        return
+    end
+
+    for key, defaultValue in pairs(defaults) do
+        local savedValue = source[key]
+        if type(defaultValue) == "table" then
+            if type(savedValue) == "table" then
+                if type(target[key]) ~= "table" then
+                    target[key] = {}
+                end
+                CopySavedValues(target[key], savedValue, defaultValue)
+            end
+        elseif savedValue ~= nil then
+            target[key] = savedValue
+        end
+    end
+end
+
+local function MigrateKnownSettings(target, source, defaults)
+    if not target or target.nirnsteelServerProfileMigration == PROFILE_MIGRATION_VERSION then
+        return
+    end
+
+    CopySavedValues(target, source, defaults)
+    target.nirnsteelServerProfileMigration = PROFILE_MIGRATION_VERSION
+end
+
+local function GetRawAccountWideSettings(savedVariableTableName, profile)
+    local savedVariableTable = _G[savedVariableTableName]
+    local displayName = GetDisplayName()
+    if savedVariableTable and savedVariableTable[profile] and savedVariableTable[profile][displayName] then
+        return savedVariableTable[profile][displayName]["$AccountWide"]
+    end
+end
+
+local function GetRawCharacterIdSettings(savedVariableTableName, profile)
+    local savedVariableTable = _G[savedVariableTableName]
+    local displayName = GetDisplayName()
+    local characterId = GetCurrentCharacterId()
+    if savedVariableTable and savedVariableTable[profile] and savedVariableTable[profile][displayName] then
+        return savedVariableTable[profile][displayName][characterId]
+    end
+end
+
+local function MigrateServerSettings(target, serverKey)
+    if not target or target.nirnsteelServerProfileMigration == PROFILE_MIGRATION_VERSION then
+        return
+    end
+
+    local oldServerSettings = GetRawAccountWideSettings("NirnsteelUI_Servers", "Default")
+    if oldServerSettings and oldServerSettings.servers and type(oldServerSettings.servers[serverKey]) == "table" then
+        CopySavedValues(target, oldServerSettings.servers[serverKey], SERVER_PROFILE_DEFAULTS)
+    end
+
+    target.nirnsteelServerProfileMigration = PROFILE_MIGRATION_VERSION
 end
 
 local function UpgradeDamageNumberDefaults(account)
@@ -587,18 +593,23 @@ local function UpgradeCastBarDefaults(account)
 end
 
 function Settings:Initialize()
-    self.account = ZO_SavedVars:NewAccountWide("NirnsteelUI_Account", SAVED_VARS_VERSION, nil, ACCOUNT_DEFAULTS)
+    self.serverKey = GetServerKey()
+
+    self.account = ZO_SavedVars:NewAccountWide("NirnsteelUI_Account", SAVED_VARS_VERSION, nil, ACCOUNT_DEFAULTS, self.serverKey)
+    MigrateKnownSettings(self.account, GetRawAccountWideSettings("NirnsteelUI_Account", "Default"), ACCOUNT_DEFAULTS)
     CopyDefaults(self.account, ACCOUNT_DEFAULTS)
     UpgradeDamageNumberDefaults(self.account)
     UpgradeExperienceTrackerDefaults(self.account)
     UpgradeResourceBarDefaults(self.account)
     UpgradeSoundChoiceLabels(self.account)
     UpgradeCastBarDefaults(self.account)
-    self.servers = ZO_SavedVars:NewAccountWide("NirnsteelUI_Servers", SAVED_VARS_VERSION, nil, SERVER_DEFAULTS)
-    self.serverKey = GetServerKey()
-    self.servers.servers[self.serverKey] = self.servers.servers[self.serverKey] or {}
-    self.server = self.servers.servers[self.serverKey]
-    CopyDefaults(self.server, SERVER_DEFAULTS.servers["*"])
+    self.servers = ZO_SavedVars:NewAccountWide("NirnsteelUI_Servers", SAVED_VARS_VERSION, nil, SERVER_PROFILE_DEFAULTS, self.serverKey)
+    MigrateServerSettings(self.servers, self.serverKey)
+    self.server = self.servers
+    CopyDefaults(self.server, SERVER_PROFILE_DEFAULTS)
+    self.character = ZO_SavedVars:NewCharacterIdSettings("NirnsteelUI_Character", SAVED_VARS_VERSION, nil, CHARACTER_DEFAULTS, self.serverKey)
+    MigrateKnownSettings(self.character, GetRawCharacterIdSettings("NirnsteelUI_Character", "Default"), CHARACTER_DEFAULTS)
+    CopyDefaults(self.character, CHARACTER_DEFAULTS)
 
     self:RegisterAddonMenu()
 end
@@ -657,6 +668,10 @@ end
 
 function Settings:GetResourceBarsPosition()
     return self.server.modules.resourceBars
+end
+
+function Settings:GetHardcoreSupport()
+    return self.character.hardcoreSupport
 end
 
 function Settings:IsDebugModeEnabled()
@@ -1145,6 +1160,28 @@ function Settings:SetResourceBarsSettingsPreviewActive(active)
     end
 end
 
+function Settings:ShouldHardcoreHideCompass()
+    return self:GetHardcoreSupport().hideCompass == true
+end
+
+function Settings:SetHardcoreHideCompass(value)
+    self:GetHardcoreSupport().hideCompass = value == true
+    if Nirnsteel_UI.Compass then
+        Nirnsteel_UI.Compass:RefreshSettings()
+    end
+end
+
+function Settings:ShouldHardcoreHideHealthResourceBar()
+    return self:GetHardcoreSupport().hideHealthResourceBar == true
+end
+
+function Settings:SetHardcoreHideHealthResourceBar(value)
+    self:GetHardcoreSupport().hideHealthResourceBar = value == true
+    if Nirnsteel_UI.ResourceBars then
+        Nirnsteel_UI.ResourceBars:RefreshSettings()
+    end
+end
+
 function Settings:HookResourceBarsSubmenuPreview(panelName)
     if self.resourceBarsPreviewHooked then
         return
@@ -1197,8 +1234,6 @@ function Settings:RegisterAddonMenu()
         return
     end
 
-    DisableLamSliderMouseWheelSupport()
-
     local panelName = "Nirnsteel_UI_Settings"
     local panelData =
     {
@@ -1206,7 +1241,7 @@ function Settings:RegisterAddonMenu()
         name = ADDON_DISPLAY_NAME,
         displayName = ADDON_DISPLAY_NAME,
         author = "Wrynch",
-        version = "1.0.0",
+        version = "1.0.1",
         registerForRefresh = true,
         registerForDefaults = true,
     }
@@ -1215,7 +1250,7 @@ function Settings:RegisterAddonMenu()
     {
         {
             type = "description",
-            text = "Most settings apply to your whole account. When you unlock and move a HUD element, its position is saved for the server you are on.",
+            text = "Most settings are account wide",
         },
         {
             type = "submenu",
@@ -1825,6 +1860,30 @@ function Settings:RegisterAddonMenu()
                     getFunc = function() return self:IsCompassEnabled() end,
                     setFunc = function(value) self:SetCompassEnabled(value) end,
                     default = ACCOUNT_DEFAULTS.modules.compass.enabled,
+                },
+            },
+        },
+        {
+            type = "submenu",
+            name = "HARDCORE Support",
+            tooltip = "Character-specific settings for HARDCORE addon support.",
+            controls =
+            {
+                {
+                    type = "checkbox",
+                    name = "Hide Compass",
+                    tooltip = "Character-specific flag for HARDCORE addon compass hiding.",
+                    getFunc = function() return self:ShouldHardcoreHideCompass() end,
+                    setFunc = function(value) self:SetHardcoreHideCompass(value) end,
+                    default = CHARACTER_DEFAULTS.hardcoreSupport.hideCompass,
+                },
+                {
+                    type = "checkbox",
+                    name = "Hide Health Resource Bar",
+                    tooltip = "Character-specific flag for HARDCORE addon health resource bar hiding.",
+                    getFunc = function() return self:ShouldHardcoreHideHealthResourceBar() end,
+                    setFunc = function(value) self:SetHardcoreHideHealthResourceBar(value) end,
+                    default = CHARACTER_DEFAULTS.hardcoreSupport.hideHealthResourceBar,
                 },
             },
         },
@@ -2622,7 +2681,10 @@ function Settings:RegisterAddonMenu()
         },
     }
 
-    MarkSliderOptionsNoMouseWheel(options)
+    local noMouseWheelSlider = Nirnsteel_UI.NoMouseWheelSlider
+    if noMouseWheelSlider and noMouseWheelSlider:Register(LAM) then
+        noMouseWheelSlider:UseForSliderOptions(options)
+    end
 
     LAM:RegisterAddonPanel(panelName, panelData)
     LAM:RegisterOptionControls(panelName, options)
