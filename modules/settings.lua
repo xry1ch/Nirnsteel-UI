@@ -9,6 +9,7 @@ local Settings = {}
 Nirnsteel_UI.Settings = Settings
 
 local PROFILE_MIGRATION_VERSION = 1
+local GROUP_CALLOUTS_CHARACTER_MIGRATION_VERSION = 1
 
 local CAMERA_PROFILE_DEFAULTS =
 {
@@ -128,6 +129,43 @@ end
 local function NormalizeSoundChoice(value)
     return SOUND_KEYS_BY_LABEL[value] or value
 end
+
+local GROUP_CALLOUTS_DEFAULTS =
+{
+    enabled = false,
+    unlocked = false,
+    soundMode = "leaderOnly",
+    soundKey = "KEYBIND_BUTTON_DISABLED",
+    scale = 100,
+    maxVisible = 3,
+    width = 460,
+    height = 56,
+    rowSpacing = 6,
+    iconSize = 24,
+    showIcon = true,
+    showAccent = true,
+    durationMS = 4200,
+    slideDistance = 14,
+    nameFontKey = "gameSmall",
+    messageFontKey = "chat",
+    nameFontSize = 14,
+    messageFontSize = 14,
+    textEffect = "soft-shadow-thin",
+    textOpacity = 94,
+    hideBackground = false,
+    backgroundOpacity = 68,
+    borderOpacity = 28,
+    accentOpacity = 54,
+    memberBackgroundColor = { r = 0.014, g = 0.016, b = 0.020 },
+    leaderBackgroundColor = { r = 0.016, g = 0.014, b = 0.012 },
+    memberNameColor = { r = 0.72, g = 0.84, b = 0.96 },
+    memberTextColor = { r = 0.84, g = 0.87, b = 0.90 },
+    memberAccentColor = { r = 0.40, g = 0.55, b = 0.72 },
+    leaderNameColor = { r = 0.96, g = 0.78, b = 0.38 },
+    leaderTextColor = { r = 0.88, g = 0.84, b = 0.74 },
+    leaderAccentColor = { r = 0.92, g = 0.64, b = 0.22 },
+    position = { x = 0, y = -260 },
+}
 
 local ACCOUNT_DEFAULTS =
 {
@@ -311,6 +349,10 @@ local SERVER_PROFILE_DEFAULTS = SERVER_DEFAULTS.servers["*"]
 
 local CHARACTER_DEFAULTS =
 {
+    modules =
+    {
+        groupCallouts = GROUP_CALLOUTS_DEFAULTS,
+    },
     hardcoreSupport =
     {
         hideCompass = false,
@@ -397,6 +439,48 @@ local function MigrateServerSettings(target, serverKey)
     end
 
     target.nirnsteelServerProfileMigration = PROFILE_MIGRATION_VERSION
+end
+
+local function GetGroupCalloutsServerPositionForCharacterMigration(server, serverKey)
+    local modules = server and server.modules
+    local position = modules and modules.groupCallouts
+    if type(position) == "table" then
+        return position
+    end
+
+    local oldServerSettings = GetRawAccountWideSettings("NirnsteelUI_Servers", "Default")
+    position = oldServerSettings
+        and oldServerSettings.servers
+        and oldServerSettings.servers[serverKey]
+        and oldServerSettings.servers[serverKey].modules
+        and oldServerSettings.servers[serverKey].modules.groupCallouts
+    if type(position) == "table" then
+        return position
+    end
+end
+
+local function MigrateGroupCalloutsToCharacterSettings(account, server, character, serverKey)
+    if not character or character.nirnsteelGroupCalloutsCharacterMigration == GROUP_CALLOUTS_CHARACTER_MIGRATION_VERSION then
+        return
+    end
+
+    local source = account
+        and account.modules
+        and account.modules.groupCallouts
+    local target = character.modules
+        and character.modules.groupCallouts
+
+    if type(source) == "table" and type(target) == "table" then
+        CopySavedValues(target, source, GROUP_CALLOUTS_DEFAULTS)
+    end
+
+    source = GetGroupCalloutsServerPositionForCharacterMigration(server, serverKey)
+    target = target and target.position
+    if type(source) == "table" and type(target) == "table" then
+        CopySavedValues(target, source, GROUP_CALLOUTS_DEFAULTS.position)
+    end
+
+    character.nirnsteelGroupCalloutsCharacterMigration = GROUP_CALLOUTS_CHARACTER_MIGRATION_VERSION
 end
 
 local function UpgradeDamageNumberDefaults(account)
@@ -563,6 +647,19 @@ local function UpgradeSoundChoiceLabels(account)
     end
 end
 
+local function UpgradeGroupCalloutsSoundChoiceLabels(character)
+    local groupCallouts = character
+        and character.modules
+        and character.modules.groupCallouts
+
+    if not groupCallouts then
+        return
+    end
+
+    groupCallouts.soundKey = NormalizeSoundChoice(groupCallouts.soundKey)
+        or GROUP_CALLOUTS_DEFAULTS.soundKey
+end
+
 local function UpgradeCastBarDefaults(account)
     local castBar = account
         and account.modules
@@ -610,6 +707,8 @@ function Settings:Initialize()
     self.character = ZO_SavedVars:NewCharacterIdSettings("NirnsteelUI_Character", SAVED_VARS_VERSION, nil, CHARACTER_DEFAULTS, self.serverKey)
     MigrateKnownSettings(self.character, GetRawCharacterIdSettings("NirnsteelUI_Character", "Default"), CHARACTER_DEFAULTS)
     CopyDefaults(self.character, CHARACTER_DEFAULTS)
+    MigrateGroupCalloutsToCharacterSettings(self.account, self.server, self.character, self.serverKey)
+    UpgradeGroupCalloutsSoundChoiceLabels(self.character)
 
     self:RegisterAddonMenu()
 end
@@ -632,6 +731,14 @@ end
 
 function Settings:GetKillSound()
     return self.account.modules.killSound
+end
+
+function Settings:GetGroupCallouts()
+    return self.character.modules.groupCallouts
+end
+
+function Settings:GetGroupCalloutsPosition()
+    return self.character.modules.groupCallouts.position
 end
 
 function Settings:GetActionBarFrames()
@@ -688,6 +795,7 @@ function Settings:SetDebugModeEnabled(value)
         Nirnsteel_UI.ExperienceTracker,
         Nirnsteel_UI.ResourceBars,
         Nirnsteel_UI.CastBar,
+        Nirnsteel_UI.GroupCallouts,
     }
 
     for _, module in ipairs(modules) do
@@ -826,6 +934,142 @@ function Settings:SetKillSoundValue(key, value)
     self:GetKillSound()[key] = value
     if Nirnsteel_UI.KillSound then
         Nirnsteel_UI.KillSound:RefreshSettings()
+    end
+end
+
+function Settings:IsGroupCalloutsEnabled()
+    return self:GetGroupCallouts().enabled
+end
+
+function Settings:IsGroupCalloutsUnlocked()
+    return self:GetGroupCallouts().unlocked
+end
+
+function Settings:SetGroupCalloutsEnabled(value)
+    self:GetGroupCallouts().enabled = value
+    if Nirnsteel_UI.GroupCallouts then
+        Nirnsteel_UI.GroupCallouts:RefreshSettings()
+    end
+end
+
+function Settings:SetGroupCalloutsUnlocked(value)
+    self:GetGroupCallouts().unlocked = value
+    if Nirnsteel_UI.GroupCallouts then
+        Nirnsteel_UI.GroupCallouts:RefreshSettings()
+    end
+end
+
+function Settings:SetGroupCalloutsValue(key, value)
+    local soundModeAliases =
+    {
+        Off = "off",
+        ["Leader Only"] = "leaderOnly",
+        ["Every Message"] = "all",
+    }
+    local fontAliases =
+    {
+        ["Game Small"] = "gameSmall",
+        ["Game Medium"] = "gameMedium",
+        Antique = "antique",
+        Trajan = "trajan",
+        Univers = "univers",
+        Chat = "chat",
+    }
+    local effectAliases =
+    {
+        None = "none",
+        ["Soft Thin"] = "soft-shadow-thin",
+        ["Soft Thick"] = "soft-shadow-thick",
+        ["Thick Outline"] = "thick-outline",
+    }
+
+    if key == "soundKey" then
+        value = NormalizeSoundChoice(value)
+    elseif key == "soundMode" then
+        value = soundModeAliases[value] or value
+        if value ~= "off" and value ~= "leaderOnly" and value ~= "all" then
+            value = GROUP_CALLOUTS_DEFAULTS.soundMode
+        end
+    elseif key == "nameFontKey" or key == "messageFontKey" then
+        value = fontAliases[value] or value
+        if value ~= "gameSmall"
+            and value ~= "gameMedium"
+            and value ~= "antique"
+            and value ~= "trajan"
+            and value ~= "univers"
+            and value ~= "chat" then
+            value = GROUP_CALLOUTS_DEFAULTS[key]
+        end
+    elseif key == "textEffect" then
+        value = effectAliases[value] or value
+        if value ~= "none"
+            and value ~= "soft-shadow-thin"
+            and value ~= "soft-shadow-thick"
+            and value ~= "thick-outline" then
+            value = GROUP_CALLOUTS_DEFAULTS.textEffect
+        end
+    end
+
+    self:GetGroupCallouts()[key] = value
+    if Nirnsteel_UI.GroupCallouts then
+        Nirnsteel_UI.GroupCallouts:RefreshSettings()
+    end
+end
+
+function Settings:GetGroupCalloutsColor(key)
+    local color = self:GetGroupCallouts()[key]
+    local defaultColor = GROUP_CALLOUTS_DEFAULTS[key]
+    if type(color) ~= "table" then
+        color = defaultColor
+    end
+
+    return color.r or defaultColor.r, color.g or defaultColor.g, color.b or defaultColor.b, 1
+end
+
+function Settings:SetGroupCalloutsColor(key, r, g, b)
+    local settings = self:GetGroupCallouts()
+    local color = settings[key]
+    if type(color) ~= "table" then
+        color = {}
+        settings[key] = color
+    end
+
+    color.r = r
+    color.g = g
+    color.b = b
+
+    if Nirnsteel_UI.GroupCallouts then
+        Nirnsteel_UI.GroupCallouts:RefreshSettings()
+    end
+end
+
+function Settings:SetGroupCalloutsPosition(x, y)
+    local position = self:GetGroupCalloutsPosition()
+    position.x = x
+    position.y = y
+end
+
+function Settings:PreviewGroupCalloutsSound()
+    if Nirnsteel_UI.GroupCallouts and Nirnsteel_UI.GroupCallouts.PreviewSound then
+        Nirnsteel_UI.GroupCallouts:PreviewSound()
+    end
+end
+
+function Settings:PreviewGroupCallout()
+    if Nirnsteel_UI.GroupCallouts and Nirnsteel_UI.GroupCallouts.PreviewRegular then
+        Nirnsteel_UI.GroupCallouts:PreviewRegular()
+    end
+end
+
+function Settings:PreviewGroupCalloutLeader()
+    if Nirnsteel_UI.GroupCallouts and Nirnsteel_UI.GroupCallouts.PreviewLeader then
+        Nirnsteel_UI.GroupCallouts:PreviewLeader()
+    end
+end
+
+function Settings:SetGroupCalloutsSettingsPreviewActive(active)
+    if Nirnsteel_UI.GroupCallouts and Nirnsteel_UI.GroupCallouts.SetSettingsPreviewActive then
+        Nirnsteel_UI.GroupCallouts:SetSettingsPreviewActive(active)
     end
 end
 
@@ -1220,6 +1464,44 @@ function Settings:HookResourceBarsSubmenuPreview(panelName)
     end)
 end
 
+function Settings:HookGroupCalloutsSubmenuPreview(panelName)
+    if self.groupCalloutsPreviewHooked then
+        return
+    end
+
+    self.groupCalloutsPreviewHooked = true
+    CALLBACK_MANAGER:RegisterCallback("LAM-PanelControlsCreated", function(panel)
+        if not panel or panel:GetName() ~= panelName then
+            return
+        end
+
+        local submenu = Nirnsteel_UI_GroupCalloutsSubmenu
+        if not submenu or submenu.nirnsteelPreviewHooked then
+            return
+        end
+
+        local function UpdatePreview()
+            zo_callLater(function()
+                self:SetGroupCalloutsSettingsPreviewActive(submenu.open == true)
+            end, 50)
+        end
+
+        if ZO_PostHookHandler then
+            ZO_PostHookHandler(submenu.label, "OnMouseUp", UpdatePreview)
+            ZO_PostHookHandler(submenu.btmToggle, "OnMouseUp", UpdatePreview)
+        end
+
+        submenu.nirnsteelPreviewHooked = true
+        UpdatePreview()
+    end)
+
+    CALLBACK_MANAGER:RegisterCallback("LAM-PanelClosed", function(panel)
+        if panel and panel:GetName() == panelName then
+            self:SetGroupCalloutsSettingsPreviewActive(false)
+        end
+    end)
+end
+
 function Settings:RegisterAddonMenu()
     local LAM = LibAddonMenu2
     if not LAM and LibStub then
@@ -1590,6 +1872,407 @@ function Settings:RegisterAddonMenu()
                     end,
                     disabled = function() return not self:IsKillSoundEnabled() end,
                     default = GetSoundChoiceLabel(ACCOUNT_DEFAULTS.modules.killSound.soundKey),
+                },
+            },
+        },
+        {
+            type = "submenu",
+            name = "Group Callouts",
+            tooltip = "Shows animated HUD callouts for ESO group chat messages.",
+            reference = "Nirnsteel_UI_GroupCalloutsSubmenu",
+            controls =
+            {
+                {
+                    type = "description",
+                    text = "Uses ESO's verified group chat channel: /group, /g, /party, and /p.",
+                },
+                {
+                    type = "checkbox",
+                    name = "Enable Group Callouts",
+                    tooltip = "Shows animated callouts for group chat messages.",
+                    getFunc = function() return self:IsGroupCalloutsEnabled() end,
+                    setFunc = function(value) self:SetGroupCalloutsEnabled(value) end,
+                    default = GROUP_CALLOUTS_DEFAULTS.enabled,
+                },
+                {
+                    type = "checkbox",
+                    name = "Unlock Group Callouts",
+                    tooltip = "Shows a handle so you can drag group callouts. The position is saved for this character on this server.",
+                    getFunc = function() return self:IsGroupCalloutsUnlocked() end,
+                    setFunc = function(value) self:SetGroupCalloutsUnlocked(value) end,
+                    disabled = function() return not self:IsGroupCalloutsEnabled() end,
+                    default = GROUP_CALLOUTS_DEFAULTS.unlocked,
+                },
+                {
+                    type = "dropdown",
+                    name = "Callout Sound Mode",
+                    tooltip = "Chooses when group callouts play a short UI sound.",
+                    choices = { "Off", "Leader Only", "Every Message" },
+                    choicesValues = { "off", "leaderOnly", "all" },
+                    getFunc = function() return self:GetGroupCallouts().soundMode end,
+                    setFunc = function(value) self:SetGroupCalloutsValue("soundMode", value) end,
+                    disabled = function() return not self:IsGroupCalloutsEnabled() end,
+                    default = GROUP_CALLOUTS_DEFAULTS.soundMode,
+                },
+                {
+                    type = "dropdown",
+                    name = "Callout Sound",
+                    tooltip = "Chooses the short UI sound used by group callouts.",
+                    choices =
+                    {
+                        "Muted Tick",
+                        "Soft Chime",
+                        "Clean Click",
+                        "Sharp Hit",
+                    },
+                    choicesValues =
+                    {
+                        "KEYBIND_BUTTON_DISABLED",
+                        "TRIBUTE_AGENT_HEALED",
+                        "STATS_RESPEC_CLEAR_ALL",
+                        "RETURNING_PLAYER_OPEN_KEYBOARD",
+                    },
+                    getFunc = function() return self:GetGroupCallouts().soundKey end,
+                    setFunc = function(value)
+                        self:SetGroupCalloutsValue("soundKey", value)
+                        self:PreviewGroupCalloutsSound()
+                    end,
+                    disabled = function()
+                        return not self:IsGroupCalloutsEnabled()
+                            or self:GetGroupCallouts().soundMode == "off"
+                    end,
+                    default = GROUP_CALLOUTS_DEFAULTS.soundKey,
+                },
+                {
+                    type = "button",
+                    name = "Preview Sound",
+                    tooltip = "Plays the selected group callout sound.",
+                    func = function() self:PreviewGroupCalloutsSound() end,
+                    disabled = function()
+                        return not self:IsGroupCalloutsEnabled()
+                            or self:GetGroupCallouts().soundMode == "off"
+                    end,
+                },
+                {
+                    type = "header",
+                    name = "Layout",
+                },
+                {
+                    type = "slider",
+                    name = "Scale",
+                    tooltip = "Controls the overall size of group callouts.",
+                    min = 60,
+                    max = 180,
+                    step = 1,
+                    getFunc = function() return self:GetGroupCallouts().scale end,
+                    setFunc = function(value) self:SetGroupCalloutsValue("scale", value) end,
+                    disabled = function() return not self:IsGroupCalloutsEnabled() end,
+                    default = GROUP_CALLOUTS_DEFAULTS.scale,
+                },
+                {
+                    type = "slider",
+                    name = "Maximum Visible",
+                    tooltip = "Controls how many group callouts can be visible at the same time.",
+                    min = 3,
+                    max = 6,
+                    step = 1,
+                    getFunc = function() return self:GetGroupCallouts().maxVisible end,
+                    setFunc = function(value) self:SetGroupCalloutsValue("maxVisible", value) end,
+                    disabled = function() return not self:IsGroupCalloutsEnabled() end,
+                    default = GROUP_CALLOUTS_DEFAULTS.maxVisible,
+                },
+                {
+                    type = "slider",
+                    name = "Width",
+                    tooltip = "Controls the width of each callout.",
+                    min = 260,
+                    max = 760,
+                    step = 10,
+                    getFunc = function() return self:GetGroupCallouts().width end,
+                    setFunc = function(value) self:SetGroupCalloutsValue("width", value) end,
+                    disabled = function() return not self:IsGroupCalloutsEnabled() end,
+                    default = GROUP_CALLOUTS_DEFAULTS.width,
+                },
+                {
+                    type = "slider",
+                    name = "Height",
+                    tooltip = "Controls the height of each callout.",
+                    min = 42,
+                    max = 110,
+                    step = 1,
+                    getFunc = function() return self:GetGroupCallouts().height end,
+                    setFunc = function(value) self:SetGroupCalloutsValue("height", value) end,
+                    disabled = function() return not self:IsGroupCalloutsEnabled() end,
+                    default = GROUP_CALLOUTS_DEFAULTS.height,
+                },
+                {
+                    type = "slider",
+                    name = "Row Spacing",
+                    tooltip = "Controls the gap between stacked callouts.",
+                    min = 0,
+                    max = 24,
+                    step = 1,
+                    getFunc = function() return self:GetGroupCallouts().rowSpacing end,
+                    setFunc = function(value) self:SetGroupCalloutsValue("rowSpacing", value) end,
+                    disabled = function() return not self:IsGroupCalloutsEnabled() end,
+                    default = GROUP_CALLOUTS_DEFAULTS.rowSpacing,
+                },
+                {
+                    type = "checkbox",
+                    name = "Show Icon",
+                    tooltip = "Shows the member or leader icon on each callout.",
+                    getFunc = function() return self:GetGroupCallouts().showIcon end,
+                    setFunc = function(value) self:SetGroupCalloutsValue("showIcon", value) end,
+                    disabled = function() return not self:IsGroupCalloutsEnabled() end,
+                    default = GROUP_CALLOUTS_DEFAULTS.showIcon,
+                },
+                {
+                    type = "slider",
+                    name = "Icon Size",
+                    tooltip = "Controls the member and leader icon size.",
+                    min = 0,
+                    max = 48,
+                    step = 1,
+                    getFunc = function() return self:GetGroupCallouts().iconSize end,
+                    setFunc = function(value) self:SetGroupCalloutsValue("iconSize", value) end,
+                    disabled = function() return not self:IsGroupCalloutsEnabled() or not self:GetGroupCallouts().showIcon end,
+                    default = GROUP_CALLOUTS_DEFAULTS.iconSize,
+                },
+                {
+                    type = "checkbox",
+                    name = "Show Accent Strip",
+                    tooltip = "Shows the small colored strip at the left edge.",
+                    getFunc = function() return self:GetGroupCallouts().showAccent end,
+                    setFunc = function(value) self:SetGroupCalloutsValue("showAccent", value) end,
+                    disabled = function() return not self:IsGroupCalloutsEnabled() end,
+                    default = GROUP_CALLOUTS_DEFAULTS.showAccent,
+                },
+                {
+                    type = "header",
+                    name = "Animation",
+                },
+                {
+                    type = "slider",
+                    name = "Visible Duration",
+                    tooltip = "Milliseconds each callout remains visible.",
+                    min = 1200,
+                    max = 9000,
+                    step = 100,
+                    getFunc = function() return self:GetGroupCallouts().durationMS end,
+                    setFunc = function(value) self:SetGroupCalloutsValue("durationMS", value) end,
+                    disabled = function() return not self:IsGroupCalloutsEnabled() end,
+                    default = GROUP_CALLOUTS_DEFAULTS.durationMS,
+                },
+                {
+                    type = "slider",
+                    name = "Slide Distance",
+                    tooltip = "Controls how far callouts slide during fade-in and fade-out.",
+                    min = 0,
+                    max = 40,
+                    step = 1,
+                    getFunc = function() return self:GetGroupCallouts().slideDistance end,
+                    setFunc = function(value) self:SetGroupCalloutsValue("slideDistance", value) end,
+                    disabled = function() return not self:IsGroupCalloutsEnabled() end,
+                    default = GROUP_CALLOUTS_DEFAULTS.slideDistance,
+                },
+                {
+                    type = "header",
+                    name = "Text",
+                },
+                {
+                    type = "dropdown",
+                    name = "Name Font",
+                    choices = { "Game Small", "Game Medium", "Antique", "Trajan", "Univers", "Chat" },
+                    choicesValues = { "gameSmall", "gameMedium", "antique", "trajan", "univers", "chat" },
+                    getFunc = function() return self:GetGroupCallouts().nameFontKey end,
+                    setFunc = function(value) self:SetGroupCalloutsValue("nameFontKey", value) end,
+                    disabled = function() return not self:IsGroupCalloutsEnabled() end,
+                    default = GROUP_CALLOUTS_DEFAULTS.nameFontKey,
+                },
+                {
+                    type = "dropdown",
+                    name = "Message Font",
+                    choices = { "Game Small", "Game Medium", "Antique", "Trajan", "Univers", "Chat" },
+                    choicesValues = { "gameSmall", "gameMedium", "antique", "trajan", "univers", "chat" },
+                    getFunc = function() return self:GetGroupCallouts().messageFontKey end,
+                    setFunc = function(value) self:SetGroupCalloutsValue("messageFontKey", value) end,
+                    disabled = function() return not self:IsGroupCalloutsEnabled() end,
+                    default = GROUP_CALLOUTS_DEFAULTS.messageFontKey,
+                },
+                {
+                    type = "slider",
+                    name = "Name Text Size",
+                    min = 9,
+                    max = 28,
+                    step = 1,
+                    getFunc = function() return self:GetGroupCallouts().nameFontSize end,
+                    setFunc = function(value) self:SetGroupCalloutsValue("nameFontSize", value) end,
+                    disabled = function() return not self:IsGroupCalloutsEnabled() end,
+                    default = GROUP_CALLOUTS_DEFAULTS.nameFontSize,
+                },
+                {
+                    type = "slider",
+                    name = "Message Text Size",
+                    min = 9,
+                    max = 30,
+                    step = 1,
+                    getFunc = function() return self:GetGroupCallouts().messageFontSize end,
+                    setFunc = function(value) self:SetGroupCalloutsValue("messageFontSize", value) end,
+                    disabled = function() return not self:IsGroupCalloutsEnabled() end,
+                    default = GROUP_CALLOUTS_DEFAULTS.messageFontSize,
+                },
+                {
+                    type = "dropdown",
+                    name = "Text Effect",
+                    choices = { "None", "Soft Thin", "Soft Thick", "Thick Outline" },
+                    choicesValues = { "none", "soft-shadow-thin", "soft-shadow-thick", "thick-outline" },
+                    getFunc = function() return self:GetGroupCallouts().textEffect end,
+                    setFunc = function(value) self:SetGroupCalloutsValue("textEffect", value) end,
+                    disabled = function() return not self:IsGroupCalloutsEnabled() end,
+                    default = GROUP_CALLOUTS_DEFAULTS.textEffect,
+                },
+                {
+                    type = "slider",
+                    name = "Text Opacity",
+                    min = 10,
+                    max = 100,
+                    step = 1,
+                    getFunc = function() return self:GetGroupCallouts().textOpacity end,
+                    setFunc = function(value) self:SetGroupCalloutsValue("textOpacity", value) end,
+                    disabled = function() return not self:IsGroupCalloutsEnabled() end,
+                    default = GROUP_CALLOUTS_DEFAULTS.textOpacity,
+                },
+                {
+                    type = "header",
+                    name = "Background",
+                },
+                {
+                    type = "checkbox",
+                    name = "Hide Background",
+                    tooltip = "Hides the callout panel and border while keeping text, icon, and accent visible.",
+                    getFunc = function() return self:GetGroupCallouts().hideBackground end,
+                    setFunc = function(value) self:SetGroupCalloutsValue("hideBackground", value) end,
+                    disabled = function() return not self:IsGroupCalloutsEnabled() end,
+                    default = GROUP_CALLOUTS_DEFAULTS.hideBackground,
+                },
+                {
+                    type = "slider",
+                    name = "Background Opacity",
+                    min = 0,
+                    max = 100,
+                    step = 1,
+                    getFunc = function() return self:GetGroupCallouts().backgroundOpacity end,
+                    setFunc = function(value) self:SetGroupCalloutsValue("backgroundOpacity", value) end,
+                    disabled = function() return not self:IsGroupCalloutsEnabled() or self:GetGroupCallouts().hideBackground end,
+                    default = GROUP_CALLOUTS_DEFAULTS.backgroundOpacity,
+                },
+                {
+                    type = "slider",
+                    name = "Border Opacity",
+                    min = 0,
+                    max = 100,
+                    step = 1,
+                    getFunc = function() return self:GetGroupCallouts().borderOpacity end,
+                    setFunc = function(value) self:SetGroupCalloutsValue("borderOpacity", value) end,
+                    disabled = function() return not self:IsGroupCalloutsEnabled() or self:GetGroupCallouts().hideBackground end,
+                    default = GROUP_CALLOUTS_DEFAULTS.borderOpacity,
+                },
+                {
+                    type = "slider",
+                    name = "Accent Opacity",
+                    min = 0,
+                    max = 100,
+                    step = 1,
+                    getFunc = function() return self:GetGroupCallouts().accentOpacity end,
+                    setFunc = function(value) self:SetGroupCalloutsValue("accentOpacity", value) end,
+                    disabled = function() return not self:IsGroupCalloutsEnabled() or not self:GetGroupCallouts().showAccent end,
+                    default = GROUP_CALLOUTS_DEFAULTS.accentOpacity,
+                },
+                {
+                    type = "header",
+                    name = "Member Colors",
+                },
+                {
+                    type = "colorpicker",
+                    name = "Member Name",
+                    getFunc = function() return self:GetGroupCalloutsColor("memberNameColor") end,
+                    setFunc = function(r, g, b) self:SetGroupCalloutsColor("memberNameColor", r, g, b) end,
+                    disabled = function() return not self:IsGroupCalloutsEnabled() end,
+                    default = function() local color = GROUP_CALLOUTS_DEFAULTS.memberNameColor return color.r, color.g, color.b, 1 end,
+                },
+                {
+                    type = "colorpicker",
+                    name = "Member Message",
+                    getFunc = function() return self:GetGroupCalloutsColor("memberTextColor") end,
+                    setFunc = function(r, g, b) self:SetGroupCalloutsColor("memberTextColor", r, g, b) end,
+                    disabled = function() return not self:IsGroupCalloutsEnabled() end,
+                    default = function() local color = GROUP_CALLOUTS_DEFAULTS.memberTextColor return color.r, color.g, color.b, 1 end,
+                },
+                {
+                    type = "colorpicker",
+                    name = "Member Accent",
+                    getFunc = function() return self:GetGroupCalloutsColor("memberAccentColor") end,
+                    setFunc = function(r, g, b) self:SetGroupCalloutsColor("memberAccentColor", r, g, b) end,
+                    disabled = function() return not self:IsGroupCalloutsEnabled() end,
+                    default = function() local color = GROUP_CALLOUTS_DEFAULTS.memberAccentColor return color.r, color.g, color.b, 1 end,
+                },
+                {
+                    type = "colorpicker",
+                    name = "Member Background",
+                    getFunc = function() return self:GetGroupCalloutsColor("memberBackgroundColor") end,
+                    setFunc = function(r, g, b) self:SetGroupCalloutsColor("memberBackgroundColor", r, g, b) end,
+                    disabled = function() return not self:IsGroupCalloutsEnabled() or self:GetGroupCallouts().hideBackground end,
+                    default = function() local color = GROUP_CALLOUTS_DEFAULTS.memberBackgroundColor return color.r, color.g, color.b, 1 end,
+                },
+                {
+                    type = "header",
+                    name = "Leader Colors",
+                },
+                {
+                    type = "colorpicker",
+                    name = "Leader Name",
+                    getFunc = function() return self:GetGroupCalloutsColor("leaderNameColor") end,
+                    setFunc = function(r, g, b) self:SetGroupCalloutsColor("leaderNameColor", r, g, b) end,
+                    disabled = function() return not self:IsGroupCalloutsEnabled() end,
+                    default = function() local color = GROUP_CALLOUTS_DEFAULTS.leaderNameColor return color.r, color.g, color.b, 1 end,
+                },
+                {
+                    type = "colorpicker",
+                    name = "Leader Message",
+                    getFunc = function() return self:GetGroupCalloutsColor("leaderTextColor") end,
+                    setFunc = function(r, g, b) self:SetGroupCalloutsColor("leaderTextColor", r, g, b) end,
+                    disabled = function() return not self:IsGroupCalloutsEnabled() end,
+                    default = function() local color = GROUP_CALLOUTS_DEFAULTS.leaderTextColor return color.r, color.g, color.b, 1 end,
+                },
+                {
+                    type = "colorpicker",
+                    name = "Leader Accent",
+                    getFunc = function() return self:GetGroupCalloutsColor("leaderAccentColor") end,
+                    setFunc = function(r, g, b) self:SetGroupCalloutsColor("leaderAccentColor", r, g, b) end,
+                    disabled = function() return not self:IsGroupCalloutsEnabled() end,
+                    default = function() local color = GROUP_CALLOUTS_DEFAULTS.leaderAccentColor return color.r, color.g, color.b, 1 end,
+                },
+                {
+                    type = "colorpicker",
+                    name = "Leader Background",
+                    getFunc = function() return self:GetGroupCalloutsColor("leaderBackgroundColor") end,
+                    setFunc = function(r, g, b) self:SetGroupCalloutsColor("leaderBackgroundColor", r, g, b) end,
+                    disabled = function() return not self:IsGroupCalloutsEnabled() or self:GetGroupCallouts().hideBackground end,
+                    default = function() local color = GROUP_CALLOUTS_DEFAULTS.leaderBackgroundColor return color.r, color.g, color.b, 1 end,
+                },
+                {
+                    type = "button",
+                    name = "Preview Regular Callout",
+                    tooltip = "Shows a sample regular group member callout.",
+                    func = function() self:PreviewGroupCallout() end,
+                    disabled = function() return not self:IsGroupCalloutsEnabled() end,
+                },
+                {
+                    type = "button",
+                    name = "Preview Leader Callout",
+                    tooltip = "Shows a sample group leader callout.",
+                    func = function() self:PreviewGroupCalloutLeader() end,
+                    disabled = function() return not self:IsGroupCalloutsEnabled() end,
                 },
             },
         },
@@ -2689,6 +3372,7 @@ function Settings:RegisterAddonMenu()
     LAM:RegisterAddonPanel(panelName, panelData)
     LAM:RegisterOptionControls(panelName, options)
     self:HookResourceBarsSubmenuPreview(panelName)
+    self:HookGroupCalloutsSubmenuPreview(panelName)
 end
 
 local function OnAddOnLoaded(_, addonName)
