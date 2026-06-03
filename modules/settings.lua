@@ -202,7 +202,7 @@ local ACCOUNT_DEFAULTS =
         killSound =
         {
             enabled = true,
-            soundKey = "BATTLEGROUND_KILL_KILLING_BLOW",
+            soundKey = "CODE_REDEMPTION_SUCCESS",
         },
         actionBarFrames =
         {
@@ -228,6 +228,7 @@ local ACCOUNT_DEFAULTS =
             opacity = 100,
             textMode = "nameAndTime",
             showIcon = true,
+            showTicks = true,
             animationIntensity = 85,
         },
         compass =
@@ -637,6 +638,9 @@ local function UpgradeSoundChoiceLabels(account)
     if modules.killSound then
         modules.killSound.soundKey = NormalizeSoundChoice(modules.killSound.soundKey)
             or ACCOUNT_DEFAULTS.modules.killSound.soundKey
+        if modules.killSound.soundKey == "BATTLEGROUND_KILL_KILLING_BLOW" then
+            modules.killSound.soundKey = ACCOUNT_DEFAULTS.modules.killSound.soundKey
+        end
     end
 
     if modules.experienceTracker then
@@ -929,6 +933,9 @@ end
 function Settings:SetKillSoundValue(key, value)
     if key == "soundKey" then
         value = NormalizeSoundChoice(value)
+        if value == "BATTLEGROUND_KILL_KILLING_BLOW" then
+            value = ACCOUNT_DEFAULTS.modules.killSound.soundKey
+        end
     end
 
     self:GetKillSound()[key] = value
@@ -1859,7 +1866,6 @@ function Settings:RegisterAddonMenu()
                     tooltip = "Chooses the sound played for your killing blows.",
                     choices =
                     {
-                        "Killing Blow",
                         "Victory Chime",
                         "Match Exit",
                         "Round End",
@@ -2449,6 +2455,15 @@ function Settings:RegisterAddonMenu()
                     setFunc = function(value) self:SetCastBarValue("showIcon", value) end,
                     disabled = function() return not self:IsCastBarEnabled() end,
                     default = ACCOUNT_DEFAULTS.modules.castBar.showIcon,
+                },
+                {
+                    type = "checkbox",
+                    name = "Show Tick Flashes",
+                    tooltip = "Shows the short white flashes that mark cast progress chunks.",
+                    getFunc = function() return self:GetCastBar().showTicks end,
+                    setFunc = function(value) self:SetCastBarValue("showTicks", value) end,
+                    disabled = function() return not self:IsCastBarEnabled() end,
+                    default = ACCOUNT_DEFAULTS.modules.castBar.showTicks,
                 },
                 {
                     type = "dropdown",

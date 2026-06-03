@@ -14,7 +14,6 @@ local DEFAULT_SETTINGS =
 
 local FALLBACK_SOUND_KEYS =
 {
-    "BATTLEGROUND_KILL_KILLING_BLOW",
     "CODE_REDEMPTION_SUCCESS",
     "BATTLEGROUND_LEAVE_MATCH",
 }
@@ -75,6 +74,10 @@ end
 
 local function GetKillingBlowSound()
     local configuredKey = GetSettingValue("soundKey")
+    if configuredKey == "BATTLEGROUND_KILL_KILLING_BLOW" then
+        configuredKey = DEFAULT_SETTINGS.soundKey
+    end
+
     if configuredKey and SOUNDS[configuredKey] then
         return SOUNDS[configuredKey]
     end

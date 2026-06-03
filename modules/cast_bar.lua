@@ -16,6 +16,7 @@ local DEFAULT_SETTINGS =
     opacity = 100,
     textMode = "nameAndTime",
     showIcon = true,
+    showTicks = true,
     animationIntensity = 85,
 }
 
@@ -121,6 +122,10 @@ end
 
 local function ShouldShowIcon()
     return GetSettingValue("showIcon") ~= false
+end
+
+local function ShouldShowTicks()
+    return GetSettingValue("showTicks") ~= false
 end
 
 local function IsWeaponAttackName(abilityName)
@@ -463,8 +468,14 @@ function CastBar:ApplyLayout()
 
     frame.shine:SetDimensions(math.max(48, math.floor((width - barLeft) * 0.26)), contentHeight + 8)
     frame.leadingEdge:SetDimensions(12 + (6 * GetIntensity()), contentHeight + 16)
+    local showTicks = ShouldShowTicks()
     for _, pulse in ipairs(frame.chunkPulses) do
         pulse:SetDimensions(8 + (4 * GetIntensity()), contentHeight + 18)
+        if not showTicks then
+            pulse.activeMS = nil
+            pulse:SetAlpha(0)
+            pulse:SetHidden(true)
+        end
     end
 
     ConfigureStatusBar(frame.bar)
@@ -542,6 +553,10 @@ function CastBar:PlayCompleteFeedback()
 end
 
 function CastBar:TriggerChunkPulse(progress)
+    if not ShouldShowTicks() then
+        return
+    end
+
     local root = self:GetRoot()
     local frame = root.frame
     local pulses = frame.chunkPulses
@@ -564,6 +579,10 @@ function CastBar:TriggerChunkPulse(progress)
 end
 
 function CastBar:UpdateChunkPulses(nowMS)
+    if not ShouldShowTicks() then
+        return
+    end
+
     local root = self:GetRoot()
     local frame = root.frame
     if not frame.chunkPulses then
