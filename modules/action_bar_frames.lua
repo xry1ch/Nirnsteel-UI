@@ -275,8 +275,8 @@ function ActionBarFrames:InstallActionSlotHooks()
         return
     end
 
-    local originalSetupSlot
-    originalSetupSlot = ZO_PreHook("ZO_ActionSlot_SetupSlot", function(iconControl, buttonControl, icon, normalFrame, downFrame, cooldownIconControl, mouseOverTexture)
+    local originalSetupSlot = ZO_ActionSlot_SetupSlot
+    local setupHooked = ZO_PreHook("ZO_ActionSlot_SetupSlot", function(iconControl, buttonControl, icon, normalFrame, downFrame, cooldownIconControl, mouseOverTexture)
         originalSetupSlot(
             iconControl,
             buttonControl,
@@ -289,8 +289,8 @@ function ActionBarFrames:InstallActionSlotHooks()
         return true
     end)
 
-    local originalClearSlot
-    originalClearSlot = ZO_PreHook("ZO_ActionSlot_ClearSlot", function(iconControl, buttonControl, normalFrame, downFrame, cooldownIconControl, mouseOverTexture)
+    local originalClearSlot = ZO_ActionSlot_ClearSlot
+    local clearHooked = ZO_PreHook("ZO_ActionSlot_ClearSlot", function(iconControl, buttonControl, normalFrame, downFrame, cooldownIconControl, mouseOverTexture)
         originalClearSlot(
             iconControl,
             buttonControl,
@@ -302,7 +302,7 @@ function ActionBarFrames:InstallActionSlotHooks()
         return true
     end)
 
-    self.actionSlotHooksInstalled = originalSetupSlot and originalClearSlot
+    self.actionSlotHooksInstalled = setupHooked ~= false and clearHooked ~= false
 end
 
 function ActionBarFrames:InstallHooks()
