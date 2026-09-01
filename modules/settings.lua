@@ -2459,7 +2459,7 @@ function Settings:RegisterAddonMenu()
                 },
                 {
                     type = "description",
-                    text = "Chain player and pet damage into a fast-draining arcade score. Critical hits and damage milestones trigger stronger fantasy impact effects.",
+                    text = "Chain player and pet damage into a fast draining arcade score.",
                 },
                 {
                     type = "checkbox",
@@ -2520,7 +2520,7 @@ function Settings:RegisterAddonMenu()
                 },
                 {
                     type = "button",
-                    name = "Preview Damage Done Minigame",
+                    name = "Preview Minigame",
                     tooltip = "Play a short normal-hit, pet-hit, critical-hit, and drain sequence.",
                     func = function() self:PreviewDamageDoneMinigame() end,
                     disabled = function() return not self:IsDamageDoneMinigameEnabled() end,
