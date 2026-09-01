@@ -245,6 +245,7 @@ local GROUP_FRAMES_DEFAULTS =
     patternScale = 220,
     feedbackEnabled = true,
     feedbackIntensity = 80,
+    lossTrailEnabled = false,
     lowHealthGlowEnabled = true,
     borderWidth = 1,
     cornerSize = 2,
@@ -404,6 +405,7 @@ local ACCOUNT_DEFAULTS =
             barPatternScale = 228,
             feedbackEnabled = true,
             feedbackIntensity = 100,
+            lossTrailEnabled = false,
             gainPulseEnabled = true,
             spendPulseEnabled = true,
             fullResourcePulseEnabled = true,
@@ -679,6 +681,7 @@ local function UpgradeResourceBarDefaults(account)
 
     local textFormatAliases =
     {
+        None = "none",
         Number = "number",
         Percent = "percent",
         ["Number + Percent"] = "numberAndPercent",
@@ -1480,6 +1483,7 @@ end
 function Settings:SetResourceBarsValue(key, value)
     local textFormatAliases =
     {
+        None = "none",
         Number = "number",
         Percent = "percent",
         ["Number + Percent"] = "numberAndPercent",
@@ -2020,6 +2024,7 @@ function Settings:BuildGroupFramesOptions()
         function()
             return Disabled() or self:GetGroupFrames().showShields == false or self:GetGroupFrames().shieldGlowEnabled == false
         end)
+    Checkbox("Loss Trailing", "lossTrailEnabled", "Leave a short-lived highlight behind the health bar when health drops.")
     Checkbox("Bar Feedback", "feedbackEnabled", "Show a low-health glow and shield pulses.")
     Slider("Feedback Intensity", "feedbackIntensity", nil, 0, 140, 5,
         function() return Disabled() or self:GetGroupFrames().feedbackEnabled ~= true end)
@@ -3479,6 +3484,15 @@ function Settings:RegisterAddonMenu()
                     default = ACCOUNT_DEFAULTS.modules.resourceBars.feedbackEnabled,
                 },
                 {
+                    type = "checkbox",
+                    name = "Loss Trailing",
+                    tooltip = "Leave a short-lived highlight behind a resource bar when its value drops.",
+                    getFunc = function() return self:GetResourceBars().lossTrailEnabled end,
+                    setFunc = function(value) self:SetResourceBarsValue("lossTrailEnabled", value) end,
+                    disabled = function() return not self:IsResourceBarsEnabled() end,
+                    default = ACCOUNT_DEFAULTS.modules.resourceBars.lossTrailEnabled,
+                },
+                {
                     type = "slider",
                     name = "Feedback Intensity",
                     min = 0,
@@ -3677,8 +3691,8 @@ function Settings:RegisterAddonMenu()
                 {
                     type = "dropdown",
                     name = "Health Text Format",
-                    choices = { "Number", "Percent", "Number + Percent" },
-                    choicesValues = { "number", "percent", "numberAndPercent" },
+                    choices = { "None", "Number", "Percent", "Number + Percent" },
+                    choicesValues = { "none", "number", "percent", "numberAndPercent" },
                     getFunc = function() return self:GetResourceBars().healthTextFormat end,
                     setFunc = function(value) self:SetResourceBarsValue("healthTextFormat", value) end,
                     disabled = function() return not self:IsResourceBarsEnabled() end,
@@ -3687,8 +3701,8 @@ function Settings:RegisterAddonMenu()
                 {
                     type = "dropdown",
                     name = "Magicka Text Format",
-                    choices = { "Number", "Percent", "Number + Percent" },
-                    choicesValues = { "number", "percent", "numberAndPercent" },
+                    choices = { "None", "Number", "Percent", "Number + Percent" },
+                    choicesValues = { "none", "number", "percent", "numberAndPercent" },
                     getFunc = function() return self:GetResourceBars().magickaTextFormat end,
                     setFunc = function(value) self:SetResourceBarsValue("magickaTextFormat", value) end,
                     disabled = function() return not self:IsResourceBarsEnabled() end,
@@ -3697,8 +3711,8 @@ function Settings:RegisterAddonMenu()
                 {
                     type = "dropdown",
                     name = "Stamina Text Format",
-                    choices = { "Number", "Percent", "Number + Percent" },
-                    choicesValues = { "number", "percent", "numberAndPercent" },
+                    choices = { "None", "Number", "Percent", "Number + Percent" },
+                    choicesValues = { "none", "number", "percent", "numberAndPercent" },
                     getFunc = function() return self:GetResourceBars().staminaTextFormat end,
                     setFunc = function(value) self:SetResourceBarsValue("staminaTextFormat", value) end,
                     disabled = function() return not self:IsResourceBarsEnabled() end,

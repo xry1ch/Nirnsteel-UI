@@ -53,6 +53,7 @@ local DEFAULT_SETTINGS =
     patternScale = 220,
     feedbackEnabled = true,
     feedbackIntensity = 80,
+    lossTrailEnabled = false,
     lowHealthGlowEnabled = true,
     borderWidth = 1,
     cornerSize = 2,
@@ -579,6 +580,8 @@ local function BuildBarStyle(data, width, height, companion)
         patternTexture = patternTexture,
         patternOpacity = Clamp(GetSetting("patternOpacity"), 0, 100) / 100 * (companion and 0.65 or 1),
         patternScale = Clamp(GetSetting("patternScale"), 24, 256),
+        lossTrailEnabled = GetSetting("lossTrailEnabled") == true,
+        lossTrailColor = { r = 1.00, g = 0.70, b = 0.24, a = companion and 0.66 or 0.78 },
         shieldEnabled = GetSetting("showShields") ~= false,
         shieldFillColor = CopyColor(GetSetting("shieldFillColor"), DEFAULT_SETTINGS.shieldFillColor),
         shieldFillOpacity = Clamp(GetSetting("shieldFillOpacity"), 0, 100) / 100,
@@ -1121,11 +1124,14 @@ local function UpdateUnitAlpha(row, data)
 end
 
 local function UpdateRowValues(row, data, smooth)
-    BarVisuals:SetValue(row.health, data.currentHealth, data.maximumHealth, smooth and data.healthAvailable)
+    local animateHealth = smooth and data.healthAvailable
+    BarVisuals:SetValue(row.health, data.currentHealth, data.maximumHealth, animateHealth, animateHealth)
     BarVisuals:SetShield(row.health, GetSetting("showShields") ~= false and data.shield or 0, data.maximumHealth, smooth)
     SetBarText(row.health, FormatHealth(data))
     if data.companion then
-        BarVisuals:SetValue(row.companionHealth, data.companion.currentHealth, data.companion.maximumHealth, smooth and data.companion.healthAvailable)
+        local animateCompanionHealth = smooth and data.companion.healthAvailable
+        BarVisuals:SetValue(row.companionHealth, data.companion.currentHealth, data.companion.maximumHealth,
+            animateCompanionHealth, animateCompanionHealth)
         BarVisuals:SetShield(row.companionHealth, GetSetting("showShields") ~= false and data.companion.shield or 0, data.companion.maximumHealth, smooth)
         SetBarText(row.companionHealth, FormatHealth(data.companion))
     end

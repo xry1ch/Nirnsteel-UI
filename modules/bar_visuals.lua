@@ -5,6 +5,8 @@ local BarVisuals = {}
 Nirnsteel_UI.BarVisuals = BarVisuals
 
 local EDGE_FRAME_TEXTURE = "EsoUI/Art/Miscellaneous/Gamepad/edgeframeGamepadBorder_thin.dds"
+local LOSS_TRAIL_HOLD_MS = 350
+local LOSS_TRAIL_CATCHUP_MS = 850
 
 BarVisuals.Textures =
 {
@@ -131,9 +133,18 @@ function BarVisuals:Create(parent, name, options)
     frame.track:SetEdgeColor(0, 0, 0, 0)
     frame.track:SetEdgeTexture("", 1, 1, 0)
 
+    frame.lossTrail = WINDOW_MANAGER:CreateControl(nil, frame.track, CT_STATUSBAR)
+    frame.lossTrail:SetAnchorFill(frame.track)
+    ConfigureStatusBar(frame.lossTrail, BarVisuals.Textures.genericTall)
+    frame.lossTrail:SetDrawLayer(DL_CONTROLS)
+    frame.lossTrail:SetDrawLevel(0)
+    frame.lossTrail:SetHidden(true)
+
     frame.bar = WINDOW_MANAGER:CreateControl(nil, frame.track, CT_STATUSBAR)
     frame.bar:SetAnchorFill(frame.track)
     ConfigureStatusBar(frame.bar, BarVisuals.Textures.genericTall)
+    frame.bar:SetDrawLayer(DL_CONTROLS)
+    frame.bar:SetDrawLevel(1)
 
     frame.patternBar = WINDOW_MANAGER:CreateControl(nil, frame.track, CT_STATUSBAR)
     frame.patternBar:SetAnchorFill(frame.track)
@@ -215,6 +226,7 @@ function BarVisuals:SetAlignment(frame, alignment)
 
     local controls =
     {
+        frame.lossTrail,
         frame.bar,
         frame.patternBar,
         frame.gloss,
@@ -228,6 +240,75 @@ function BarVisuals:SetAlignment(frame, alignment)
         end
     end
     frame.alignment = alignment
+end
+
+function BarVisuals:StopLossTrail(frame, current, maximum)
+    if not frame or not frame.lossTrail then
+        return
+    end
+
+    current = math.max(tonumber(current) or 0, 0)
+    maximum = math.max(tonumber(maximum) or 0, 0)
+    frame.lossTrail:SetHandler("OnUpdate", nil)
+    frame.lossTrail:SetMinMax(0, maximum)
+    frame.lossTrail:SetValue(current)
+    frame.lossTrail:SetHidden(true)
+    frame.lossTrailValue = current
+    frame.lossTrailTarget = nil
+    frame.lossTrailStartValue = nil
+    frame.lossTrailStartMS = nil
+    frame.lossTrailHoldUntilMS = nil
+end
+
+function BarVisuals:UpdateLossTrail(frame)
+    if not frame or not frame.lossTrail or frame.lossTrailTarget == nil then
+        return
+    end
+
+    local now = GetFrameTimeMilliseconds()
+    if now < (frame.lossTrailHoldUntilMS or 0) then
+        return
+    end
+
+    if not frame.lossTrailStartMS then
+        frame.lossTrailStartMS = now
+        frame.lossTrailStartValue = frame.lossTrailValue or frame.lossTrailTarget
+    end
+
+    local progress = Clamp((now - frame.lossTrailStartMS) / LOSS_TRAIL_CATCHUP_MS, 0, 1)
+    local easedProgress = 1 - ((1 - progress) * (1 - progress))
+    local startValue = frame.lossTrailStartValue or frame.lossTrailTarget
+    local value = startValue + ((frame.lossTrailTarget - startValue) * easedProgress)
+    frame.lossTrailValue = value
+    frame.lossTrail:SetValue(value)
+
+    if progress >= 1 then
+        self:StopLossTrail(frame, frame.lossTrailTarget, frame.nirnsteelMaximum)
+    end
+end
+
+function BarVisuals:StartLossTrail(frame, previous, current, maximum)
+    if not frame or not frame.lossTrail then
+        return
+    end
+
+    previous = math.max(tonumber(previous) or 0, 0)
+    current = math.max(tonumber(current) or 0, 0)
+    maximum = math.max(tonumber(maximum) or 0, 0)
+    local startValue = math.min(math.max(frame.lossTrailValue or previous, previous), maximum)
+
+    frame.lossTrail:SetMinMax(0, maximum)
+    frame.lossTrail:SetValue(startValue)
+    frame.lossTrail:SetHidden(false)
+    frame.lossTrailValue = startValue
+    frame.lossTrailTarget = math.min(current, maximum)
+    frame.lossTrailStartValue = nil
+    frame.lossTrailStartMS = nil
+    frame.lossTrailHoldUntilMS = GetFrameTimeMilliseconds() + LOSS_TRAIL_HOLD_MS
+    frame.lossTrailUpdateHandler = frame.lossTrailUpdateHandler or function()
+        self:UpdateLossTrail(frame)
+    end
+    frame.lossTrail:SetHandler("OnUpdate", frame.lossTrailUpdateHandler)
 end
 
 function BarVisuals:ApplyPattern(frame)
@@ -301,6 +382,7 @@ function BarVisuals:ApplyStyle(frame, style)
     frame.innerShadow:SetEdgeTexture(EDGE_FRAME_TEXTURE, 128, 16, math.max(cornerSize - borderWidth, 1), 0)
 
     ConfigureStatusBar(frame.bar, textureInfo)
+    ConfigureStatusBar(frame.lossTrail, textureInfo)
     ConfigureStatusBar(frame.patternBar, textureInfo)
     ConfigureStatusBar(frame.feedbackFlash, textureInfo)
     ConfigureStatusBar(frame.readyFlash, textureInfo)
@@ -309,6 +391,13 @@ function BarVisuals:ApplyStyle(frame, style)
     local startR, startG, startB, startA = ReadColor(style.fillStartColor, 0.7, 0.05, 0.07, 1)
     local endR, endG, endB, endA = ReadColor(style.fillEndColor, startR, startG, startB, startA)
     frame.bar:SetGradientColors(startR, startG, startB, startA, endR, endG, endB, endA)
+
+    local lossR, lossG, lossB, lossA = ReadColor(style.lossTrailColor, 1, 0.70, 0.24, 0.78)
+    frame.lossTrail:SetColor(lossR, lossG, lossB, lossA)
+    frame.lossTrail:SetAlpha(alpha)
+    if style.lossTrailEnabled ~= true then
+        self:StopLossTrail(frame, frame.nirnsteelCurrent or 0, frame.nirnsteelMaximum or 0)
+    end
 
     frame.gloss:SetTexture(textureInfo.gloss or textureInfo.texture)
     frame.gloss:SetTextureCoords(unpack(textureInfo.coords))
@@ -377,13 +466,14 @@ function BarVisuals:SetLowState(frame, current, maximum, color, threshold, inten
     frame.lowResourceGlow:SetHidden(false)
 end
 
-function BarVisuals:SetValue(frame, current, maximum, smooth)
+function BarVisuals:SetValue(frame, current, maximum, smooth, animateLoss)
     if not frame or not frame.bar then
         return
     end
 
     current = math.max(tonumber(current) or 0, 0)
     maximum = math.max(tonumber(maximum) or 0, 0)
+    local previous = frame.nirnsteelCurrent
     frame.nirnsteelCurrent = current
     frame.nirnsteelMaximum = maximum
     frame.bar:SetMinMax(0, maximum)
@@ -398,6 +488,11 @@ function BarVisuals:SetValue(frame, current, maximum, smooth)
     self:ApplyPattern(frame)
 
     local style = frame.nirnsteelStyle or {}
+    if style.lossTrailEnabled == true and animateLoss == true and previous ~= nil and current < previous then
+        self:StartLossTrail(frame, previous, current, maximum)
+    elseif animateLoss ~= nil or style.lossTrailEnabled ~= true then
+        self:StopLossTrail(frame, current, maximum)
+    end
     self:SetLowState(frame, current, maximum, style.lowGlowColor or style.fillEndColor, style.lowGlowThreshold, style.feedbackIntensity, style.lowGlowEnabled)
 end
 

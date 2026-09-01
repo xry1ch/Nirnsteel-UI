@@ -39,6 +39,7 @@ local DEFAULT_SETTINGS =
     barPatternScale = 228,
     feedbackEnabled = true,
     feedbackIntensity = 95,
+    lossTrailEnabled = false,
     gainPulseEnabled = true,
     spendPulseEnabled = true,
     fullResourcePulseEnabled = true,
@@ -114,6 +115,8 @@ local BAR_ORDER = { "health", "magicka", "stamina" }
 
 local TEXT_FORMAT_ALIASES =
 {
+    none = "none",
+    None = "none",
     number = "number",
     Number = "number",
     percent = "percent",
@@ -336,6 +339,8 @@ local function ApplyFrameStyle(frame, width, height)
         patternTexture = BarVisuals.Patterns[GetSettingValue("barPatternKey")] or BarVisuals.Patterns.smoke,
         patternOpacity = ClampNumber(GetSettingValue("barPatternOpacity"), 0, 100) / 100,
         patternScale = ClampNumber(GetSettingValue("barPatternScale"), 24, 256),
+        lossTrailEnabled = GetSettingValue("lossTrailEnabled") == true,
+        lossTrailColor = { r = 1.00, g = 0.70, b = 0.24, a = 0.78 },
         shieldEnabled = ShouldShowShieldOverlay(),
         shieldFillColor = GetSettingValue("shieldFillColor") or DEFAULT_SETTINGS.shieldFillColor,
         shieldFillOpacity = ClampNumber(GetSettingValue("shieldFillOpacity"), 0, 100) / 100,
@@ -525,6 +530,10 @@ function ResourceBars:GetResourceText(key)
     local current = state and state.current or 0
     local effectiveMax = state and state.effectiveMax or state and state.maximum or 0
     local formatMode, position = GetBarTextSettings(key)
+    if formatMode == "none" then
+        return nil, nil, nil
+    end
+
     local main = FormatByMode(current, effectiveMax, formatMode)
     local shieldMode
     local shieldValue = 0
@@ -576,8 +585,15 @@ function ResourceBars:UpdateAllLabels()
         local frame = self.bars[key]
         if frame then
             local centerText, leftText, rightText = self:GetResourceText(key)
-            local _, position = GetBarTextSettings(key)
-            if position == "sides" then
+            local formatMode, position = GetBarTextSettings(key)
+            if formatMode == "none" then
+                frame.centerLabel:SetHidden(true)
+                frame.leftLabel:SetHidden(true)
+                frame.rightLabel:SetHidden(true)
+                frame.centerLabel:SetText("")
+                frame.leftLabel:SetText("")
+                frame.rightLabel:SetText("")
+            elseif position == "sides" then
                 frame.centerLabel:SetHidden(true)
                 frame.leftLabel:SetHidden(false)
                 frame.rightLabel:SetHidden(false)
@@ -783,8 +799,8 @@ function ResourceBars:UpdateVisibility()
     root:SetHidden(not shouldShow)
 end
 
-function ResourceBars:UpdateBarValue(frame, current, maximum, instant)
-    BarVisuals:SetValue(frame, current, maximum, not instant)
+function ResourceBars:UpdateBarValue(frame, current, maximum, instant, animateLoss)
+    BarVisuals:SetValue(frame, current, maximum, not instant, animateLoss)
 end
 
 function ResourceBars:PlayResourcePulse(frame, key, pulseType, deltaRatio)
@@ -859,7 +875,9 @@ function ResourceBars:UpdateLowResourceFeedback(frame, key, current, maximum)
 end
 
 function ResourceBars:UpdatePatternOverlay(frame, current, maximum)
-    BarVisuals:SetValue(frame, current, maximum, false)
+    frame.patternBar:SetMinMax(0, maximum)
+    frame.patternBar:SetValue(current)
+    BarVisuals:ApplyPattern(frame)
 end
 
 function ResourceBars:UpdateHealthShieldOverlay(_healthCurrent, healthMax)
@@ -887,7 +905,7 @@ function ResourceBars:UpdateResource(key, current, maximum, effectiveMax, instan
         return
     end
 
-    self:UpdateBarValue(frame, current, maximum, instant or key == "health")
+    self:UpdateBarValue(frame, current, maximum, instant or key == "health", not instant)
 
     local currentValue = tonumber(current) or 0
     local maximumValue = tonumber(maximum) or 0
