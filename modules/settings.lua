@@ -191,6 +191,12 @@ local GROUP_CALLOUTS_DEFAULTS =
     showAccent = true,
     durationMS = 4200,
     slideDistance = 14,
+    shimmerEnabled = false,
+    shimmerIntensity = 50,
+    shimmerTarget = "leaderOnly",
+    glowEnabled = false,
+    glowIntensity = 50,
+    glowTarget = "leaderOnly",
     nameFontKey = "gameSmall",
     messageFontKey = "chat",
     nameFontSize = 14,
@@ -1142,6 +1148,12 @@ function Settings:SetGroupCalloutsValue(key, value)
         ["Soft Thick"] = "soft-shadow-thick",
         ["Thick Outline"] = "thick-outline",
     }
+    local targetAliases =
+    {
+        ["Leader Only"] = "leaderOnly",
+        ["All Callouts"] = "all",
+        All = "all",
+    }
 
     if key == "soundKey" then
         value = NormalizeSoundChoice(value)
@@ -1167,6 +1179,11 @@ function Settings:SetGroupCalloutsValue(key, value)
             and value ~= "soft-shadow-thick"
             and value ~= "thick-outline" then
             value = GROUP_CALLOUTS_DEFAULTS.textEffect
+        end
+    elseif key == "shimmerTarget" or key == "glowTarget" then
+        value = targetAliases[value] or value
+        if value ~= "leaderOnly" and value ~= "all" then
+            value = GROUP_CALLOUTS_DEFAULTS[key]
         end
     end
 
@@ -2378,10 +2395,6 @@ function Settings:RegisterAddonMenu()
             controls =
             {
                 {
-                    type = "description",
-                    text = "Kill sounds use your ESO SFX/UI volume. ESO does not let addons set a separate volume for one sound.",
-                },
-                {
                     type = "checkbox",
                     name = "Enable Kill Sound",
                     getFunc = function() return self:IsKillSoundEnabled() end,
@@ -2597,6 +2610,78 @@ function Settings:RegisterAddonMenu()
                     setFunc = function(value) self:SetGroupCalloutsValue("slideDistance", value) end,
                     disabled = function() return not self:IsGroupCalloutsEnabled() end,
                     default = GROUP_CALLOUTS_DEFAULTS.slideDistance,
+                },
+                {
+                    type = "checkbox",
+                    name = "Shimmer",
+                    tooltip = "Sweep a soft highlight across matching callouts.",
+                    getFunc = function() return self:GetGroupCallouts().shimmerEnabled end,
+                    setFunc = function(value) self:SetGroupCalloutsValue("shimmerEnabled", value) end,
+                    disabled = function() return not self:IsGroupCalloutsEnabled() end,
+                    default = GROUP_CALLOUTS_DEFAULTS.shimmerEnabled,
+                },
+                {
+                    type = "slider",
+                    name = "Shimmer Intensity",
+                    min = 0,
+                    max = 100,
+                    step = 1,
+                    getFunc = function() return self:GetGroupCallouts().shimmerIntensity end,
+                    setFunc = function(value) self:SetGroupCalloutsValue("shimmerIntensity", value) end,
+                    disabled = function()
+                        return not self:IsGroupCalloutsEnabled()
+                            or not self:GetGroupCallouts().shimmerEnabled
+                    end,
+                    default = GROUP_CALLOUTS_DEFAULTS.shimmerIntensity,
+                },
+                {
+                    type = "dropdown",
+                    name = "Shimmer For",
+                    choices = { "Leader Only", "All Callouts" },
+                    choicesValues = { "leaderOnly", "all" },
+                    getFunc = function() return self:GetGroupCallouts().shimmerTarget end,
+                    setFunc = function(value) self:SetGroupCalloutsValue("shimmerTarget", value) end,
+                    disabled = function()
+                        return not self:IsGroupCalloutsEnabled()
+                            or not self:GetGroupCallouts().shimmerEnabled
+                    end,
+                    default = GROUP_CALLOUTS_DEFAULTS.shimmerTarget,
+                },
+                {
+                    type = "checkbox",
+                    name = "Glow",
+                    tooltip = "Pulse a colored glow around matching callouts.",
+                    getFunc = function() return self:GetGroupCallouts().glowEnabled end,
+                    setFunc = function(value) self:SetGroupCalloutsValue("glowEnabled", value) end,
+                    disabled = function() return not self:IsGroupCalloutsEnabled() end,
+                    default = GROUP_CALLOUTS_DEFAULTS.glowEnabled,
+                },
+                {
+                    type = "slider",
+                    name = "Glow Intensity",
+                    min = 0,
+                    max = 100,
+                    step = 1,
+                    getFunc = function() return self:GetGroupCallouts().glowIntensity end,
+                    setFunc = function(value) self:SetGroupCalloutsValue("glowIntensity", value) end,
+                    disabled = function()
+                        return not self:IsGroupCalloutsEnabled()
+                            or not self:GetGroupCallouts().glowEnabled
+                    end,
+                    default = GROUP_CALLOUTS_DEFAULTS.glowIntensity,
+                },
+                {
+                    type = "dropdown",
+                    name = "Glow For",
+                    choices = { "Leader Only", "All Callouts" },
+                    choicesValues = { "leaderOnly", "all" },
+                    getFunc = function() return self:GetGroupCallouts().glowTarget end,
+                    setFunc = function(value) self:SetGroupCalloutsValue("glowTarget", value) end,
+                    disabled = function()
+                        return not self:IsGroupCalloutsEnabled()
+                            or not self:GetGroupCallouts().glowEnabled
+                    end,
+                    default = GROUP_CALLOUTS_DEFAULTS.glowTarget,
                 },
                 {
                     type = "header",
