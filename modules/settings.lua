@@ -10,6 +10,7 @@ Nirnsteel_UI.Settings = Settings
 
 local PROFILE_MIGRATION_VERSION = 1
 local GROUP_CALLOUTS_CHARACTER_MIGRATION_VERSION = 1
+local GROUP_FRAMES_DEFAULTS_MIGRATION_VERSION = 1
 
 local CAMERA_PROFILE_DEFAULTS =
 {
@@ -167,6 +168,76 @@ local GROUP_CALLOUTS_DEFAULTS =
     position = { x = 0, y = -260 },
 }
 
+local GROUP_FRAMES_DEFAULTS =
+{
+    enabled = true,
+    unlocked = false,
+    scale = 100,
+    width = 270,
+    healthHeight = 24,
+    identityHeight = 20,
+    rowSpacing = 6,
+    columnSpacing = 14,
+    opacity = 100,
+    sortMode = "role",
+    displayNameMode = "displayName",
+    healthColorMode = "role",
+    healthTextMode = "number",
+    healthTextPosition = "left",
+    showClassIcon = true,
+    showRoleIcon = true,
+    showLeaderIcon = true,
+    showShields = true,
+    showDeathAnimation = true,
+    showFriendIcon = false,
+    showGuildIcon = false,
+    showLevel = true,
+    showLevelStyle = true,
+    showRecoveryRhythm = false,
+    glossEnabled = true,
+    patternEnabled = true,
+    patternKey = "ZigZag",
+    patternOpacity = 8,
+    patternScale = 220,
+    feedbackEnabled = true,
+    feedbackIntensity = 80,
+    lowHealthGlowEnabled = true,
+    borderWidth = 1,
+    cornerSize = 2,
+    innerShadowAlpha = 55,
+    outerShadowAlpha = 75,
+    textFontKey = "gameSmall",
+    nameTextSize = 15,
+    healthTextSize = 16,
+    textOutline = "thick-outline",
+    textOpacity = 100,
+    textInset = 6,
+    staticColor = { r = 0.78, g = 0.10, b = 0.11 },
+    fullHealthColor = { r = 0.96, g = 0.96, b = 0.94 },
+    lowHealthColor = { r = 0.56, g = 0.035, b = 0.055 },
+    tankColor = { r = 0.23, g = 0.51, b = 0.88 },
+    healerColor = { r = 0.28, g = 0.72, b = 0.42 },
+    damageColor = { r = 0.84, g = 0.27, b = 0.25 },
+    otherColor = { r = 0.85, g = 0.60, b = 0.24 },
+    companionColor = { r = 0.24, g = 0.62, b = 0.62 },
+    shieldFillOpacity = 70,
+    shieldFillColor = { r = 0.95, g = 0.60, b = 0.33 },
+    shieldGlowEnabled = true,
+    shieldGlowOpacity = 58,
+    shieldGlowColor = { r = 0.95, g = 0.66, b = 0.56 },
+    classColors =
+    {
+        [1] = { r = 0.85, g = 0.47, b = 0.17 },
+        [2] = { r = 0.54, g = 0.39, b = 0.84 },
+        [3] = { r = 0.70, g = 0.23, b = 0.28 },
+        [4] = { r = 0.26, g = 0.66, b = 0.54 },
+        [5] = { r = 0.40, g = 0.54, b = 0.66 },
+        [6] = { r = 0.88, g = 0.75, b = 0.33 },
+        [117] = { r = 0.25, g = 0.72, b = 0.47 },
+    },
+    unknownClassColor = { r = 0.54, g = 0.59, b = 0.66 },
+}
+
 local ACCOUNT_DEFAULTS =
 {
     debugMode = false,
@@ -256,6 +327,7 @@ local ACCOUNT_DEFAULTS =
             hideBackground = false,
             hideStockProgressBar = true,
         },
+        groupFrames = GROUP_FRAMES_DEFAULTS,
         resourceBars =
         {
             enabled = true,
@@ -335,6 +407,11 @@ local SERVER_DEFAULTS =
                 {
                     x = 0,
                     y = -120,
+                },
+                groupFrames =
+                {
+                    keyboard = { custom = false, x = 28, y = 100 },
+                    gamepad = { custom = false, x = 70, y = 55 },
                 },
                 castBar =
                 {
@@ -619,6 +696,24 @@ local function UpgradeResourceBarDefaults(account)
     resourceBars.barPatternKey = patternAliases[resourceBars.barPatternKey] or resourceBars.barPatternKey or ACCOUNT_DEFAULTS.modules.resourceBars.barPatternKey
 end
 
+local function UpgradeGroupFramesDefaults(account)
+    local groupFrames = account
+        and account.modules
+        and account.modules.groupFrames
+
+    if not groupFrames
+        or groupFrames.nirnsteelDefaultsMigration == GROUP_FRAMES_DEFAULTS_MIGRATION_VERSION then
+        return
+    end
+
+    -- Carry users who received the original Group Frames default forward without
+    -- overwriting any other pattern scale they may have selected themselves.
+    if groupFrames.patternScale == 96 then
+        groupFrames.patternScale = GROUP_FRAMES_DEFAULTS.patternScale
+    end
+    groupFrames.nirnsteelDefaultsMigration = GROUP_FRAMES_DEFAULTS_MIGRATION_VERSION
+end
+
 local function UpgradeSoundChoiceLabels(account)
     local modules = account and account.modules
     if not modules then
@@ -702,6 +797,7 @@ function Settings:Initialize()
     UpgradeDamageNumberDefaults(self.account)
     UpgradeExperienceTrackerDefaults(self.account)
     UpgradeResourceBarDefaults(self.account)
+    UpgradeGroupFramesDefaults(self.account)
     UpgradeSoundChoiceLabels(self.account)
     UpgradeCastBarDefaults(self.account)
     self.servers = ZO_SavedVars:NewAccountWide("NirnsteelUI_Servers", SAVED_VARS_VERSION, nil, SERVER_PROFILE_DEFAULTS, self.serverKey)
@@ -781,6 +877,15 @@ function Settings:GetResourceBarsPosition()
     return self.server.modules.resourceBars
 end
 
+function Settings:GetGroupFrames()
+    return self.account.modules.groupFrames
+end
+
+function Settings:GetGroupFramesPosition(mode)
+    mode = mode or (IsInGamepadPreferredMode and IsInGamepadPreferredMode() and "gamepad" or "keyboard")
+    return self.server.modules.groupFrames[mode]
+end
+
 function Settings:GetHardcoreSupport()
     return self.character.hardcoreSupport
 end
@@ -798,6 +903,7 @@ function Settings:SetDebugModeEnabled(value)
         Nirnsteel_UI.DamageNumbers,
         Nirnsteel_UI.ExperienceTracker,
         Nirnsteel_UI.ResourceBars,
+        Nirnsteel_UI.GroupFrames,
         Nirnsteel_UI.CastBar,
         Nirnsteel_UI.GroupCallouts,
     }
@@ -1411,6 +1517,106 @@ function Settings:SetResourceBarsSettingsPreviewActive(active)
     end
 end
 
+function Settings:IsGroupFramesEnabled()
+    return self:GetGroupFrames().enabled ~= false
+end
+
+function Settings:IsGroupFramesUnlocked()
+    return self:IsGroupFramesEnabled() and self:GetGroupFrames().unlocked == true
+end
+
+function Settings:SetGroupFramesEnabled(value)
+    self:GetGroupFrames().enabled = value == true
+    if Nirnsteel_UI.GroupFrames then
+        Nirnsteel_UI.GroupFrames:RefreshSettings()
+    end
+end
+
+function Settings:SetGroupFramesUnlocked(value)
+    self:GetGroupFrames().unlocked = value == true
+    if Nirnsteel_UI.GroupFrames then
+        Nirnsteel_UI.GroupFrames:RefreshSettings()
+    end
+end
+
+function Settings:SetGroupFramesValue(key, value)
+    self:GetGroupFrames()[key] = value
+    if Nirnsteel_UI.GroupFrames then
+        Nirnsteel_UI.GroupFrames:RefreshSettings()
+    end
+end
+
+function Settings:GetGroupFramesColor(key)
+    local color = self:GetGroupFrames()[key]
+    local fallback = GROUP_FRAMES_DEFAULTS[key]
+    return color or fallback
+end
+
+function Settings:SetGroupFramesColor(key, r, g, b)
+    local settings = self:GetGroupFrames()
+    settings[key] = settings[key] or {}
+    settings[key].r = r
+    settings[key].g = g
+    settings[key].b = b
+    if Nirnsteel_UI.GroupFrames then
+        Nirnsteel_UI.GroupFrames:RefreshSettings()
+    end
+end
+
+function Settings:GetGroupFramesClassColor(classId)
+    local settings = self:GetGroupFrames()
+    settings.classColors = settings.classColors or {}
+    return settings.classColors[classId] or GROUP_FRAMES_DEFAULTS.classColors[classId]
+end
+
+function Settings:SetGroupFramesClassColor(classId, r, g, b)
+    local settings = self:GetGroupFrames()
+    settings.classColors = settings.classColors or {}
+    settings.classColors[classId] = settings.classColors[classId] or {}
+    settings.classColors[classId].r = r
+    settings.classColors[classId].g = g
+    settings.classColors[classId].b = b
+    if Nirnsteel_UI.GroupFrames then
+        Nirnsteel_UI.GroupFrames:RefreshSettings()
+    end
+end
+
+function Settings:SetGroupFramesPosition(mode, x, y, custom)
+    local position = self:GetGroupFramesPosition(mode)
+    position.x = x
+    position.y = y
+    position.custom = custom == true
+end
+
+function Settings:ResetGroupFramesPosition(mode)
+    local position = self:GetGroupFramesPosition(mode)
+    local defaults = SERVER_PROFILE_DEFAULTS.modules.groupFrames[mode]
+    position.x = defaults.x
+    position.y = defaults.y
+    position.custom = false
+end
+
+function Settings:SetGroupFramesSettingsPreviewActive(active)
+    if Nirnsteel_UI.GroupFrames and Nirnsteel_UI.GroupFrames.SetSettingsPreviewActive then
+        Nirnsteel_UI.GroupFrames:SetSettingsPreviewActive(active)
+    end
+end
+
+function Settings:ReplayGroupFramesPreviewEffects()
+    if Nirnsteel_UI.GroupFrames and Nirnsteel_UI.GroupFrames.ReplayPreviewEffects then
+        Nirnsteel_UI.GroupFrames:ReplayPreviewEffects()
+    end
+end
+
+function Settings:ResetActiveGroupFramesPosition()
+    if Nirnsteel_UI.GroupFrames and Nirnsteel_UI.GroupFrames.ResetPosition then
+        Nirnsteel_UI.GroupFrames:ResetPosition()
+    else
+        local mode = IsInGamepadPreferredMode and IsInGamepadPreferredMode() and "gamepad" or "keyboard"
+        self:ResetGroupFramesPosition(mode)
+    end
+end
+
 function Settings:ShouldHardcoreHideCompass()
     return self:GetHardcoreSupport().hideCompass == true
 end
@@ -1509,6 +1715,294 @@ function Settings:HookGroupCalloutsSubmenuPreview(panelName)
     end)
 end
 
+function Settings:HookGroupFramesSubmenuPreview(panelName)
+    if self.groupFramesPreviewHooked then
+        return
+    end
+
+    self.groupFramesPreviewHooked = true
+    CALLBACK_MANAGER:RegisterCallback("LAM-PanelControlsCreated", function(panel)
+        if not panel or panel:GetName() ~= panelName then
+            return
+        end
+
+        local submenu = Nirnsteel_UI_GroupFramesSubmenu
+        if not submenu or submenu.nirnsteelPreviewHooked then
+            return
+        end
+
+        local function UpdatePreview()
+            zo_callLater(function()
+                self:SetGroupFramesSettingsPreviewActive(submenu.open == true)
+            end, 50)
+        end
+
+        if ZO_PostHookHandler then
+            ZO_PostHookHandler(submenu.label, "OnMouseUp", UpdatePreview)
+            ZO_PostHookHandler(submenu.btmToggle, "OnMouseUp", UpdatePreview)
+        end
+
+        submenu.nirnsteelPreviewHooked = true
+        UpdatePreview()
+    end)
+
+    CALLBACK_MANAGER:RegisterCallback("LAM-PanelClosed", function(panel)
+        if panel and panel:GetName() == panelName then
+            self:SetGroupFramesSettingsPreviewActive(false)
+        end
+    end)
+end
+
+function Settings:BuildGroupFramesOptions()
+    local controls = {}
+    local function Add(control)
+        controls[#controls + 1] = control
+    end
+    local function Disabled()
+        return not self:IsGroupFramesEnabled()
+    end
+    local function Header(name)
+        Add({ type = "header", name = name })
+    end
+    local function Description(text)
+        Add({ type = "description", text = text })
+    end
+    local function Checkbox(name, key, tooltip, disabled)
+        Add(
+        {
+            type = "checkbox",
+            name = name,
+            tooltip = tooltip,
+            getFunc = function() return self:GetGroupFrames()[key] end,
+            setFunc = function(value) self:SetGroupFramesValue(key, value) end,
+            disabled = disabled or Disabled,
+            default = GROUP_FRAMES_DEFAULTS[key],
+        })
+    end
+    local function Dropdown(name, key, tooltip, choices, values, disabled)
+        Add(
+        {
+            type = "dropdown",
+            name = name,
+            tooltip = tooltip,
+            choices = choices,
+            choicesValues = values,
+            getFunc = function() return self:GetGroupFrames()[key] end,
+            setFunc = function(value) self:SetGroupFramesValue(key, value) end,
+            disabled = disabled or Disabled,
+            default = GROUP_FRAMES_DEFAULTS[key],
+        })
+    end
+    local function Slider(name, key, tooltip, minimum, maximum, step, disabled)
+        Add(
+        {
+            type = "slider",
+            name = name,
+            tooltip = tooltip,
+            min = minimum,
+            max = maximum,
+            step = step,
+            getFunc = function() return self:GetGroupFrames()[key] end,
+            setFunc = function(value) self:SetGroupFramesValue(key, value) end,
+            disabled = disabled or Disabled,
+            default = GROUP_FRAMES_DEFAULTS[key],
+        })
+    end
+    local function ColorPicker(name, key, tooltip, disabled)
+        Add(
+        {
+            type = "colorpicker",
+            name = name,
+            tooltip = tooltip,
+            getFunc = function()
+                local color = self:GetGroupFramesColor(key)
+                return color.r, color.g, color.b, 1
+            end,
+            setFunc = function(r, g, b) self:SetGroupFramesColor(key, r, g, b) end,
+            disabled = disabled or Disabled,
+            default = function()
+                local color = GROUP_FRAMES_DEFAULTS[key]
+                return color.r, color.g, color.b, 1
+            end,
+        })
+    end
+    local function ClassColorPicker(name, classId)
+        Add(
+        {
+            type = "colorpicker",
+            name = name,
+            tooltip = "Static health color used for this class.",
+            getFunc = function()
+                local color = self:GetGroupFramesClassColor(classId)
+                return color.r, color.g, color.b, 1
+            end,
+            setFunc = function(r, g, b) self:SetGroupFramesClassColor(classId, r, g, b) end,
+            disabled = function()
+                return Disabled() or self:GetGroupFrames().healthColorMode ~= "class"
+            end,
+            default = function()
+                local color = GROUP_FRAMES_DEFAULTS.classColors[classId]
+                return color.r, color.g, color.b, 1
+            end,
+        })
+    end
+
+    Header("General & Position")
+    Add(
+    {
+        type = "checkbox",
+        name = "Enable Group Frames",
+        tooltip = "Replaces ESO's stock group and raid frames while you are grouped. Stock frames are restored immediately when disabled.",
+        getFunc = function() return self:IsGroupFramesEnabled() end,
+        setFunc = function(value) self:SetGroupFramesEnabled(value) end,
+        default = GROUP_FRAMES_DEFAULTS.enabled,
+    })
+    Add(
+    {
+        type = "checkbox",
+        name = "Unlock Position",
+        tooltip = "Shows a draggable outline. Keyboard and gamepad positions are saved separately for this server.",
+        getFunc = function() return self:IsGroupFramesUnlocked() end,
+        setFunc = function(value) self:SetGroupFramesUnlocked(value) end,
+        disabled = Disabled,
+        default = GROUP_FRAMES_DEFAULTS.unlocked,
+    })
+    Add(
+    {
+        type = "button",
+        name = "Reset Position",
+        tooltip = "Returns the current keyboard or gamepad position to ESO's matching stock group-frame anchor.",
+        func = function() self:ResetActiveGroupFramesPosition() end,
+        disabled = Disabled,
+        width = "half",
+    })
+    Slider("Scale", "scale", "Changes the overall group-frame size.", 70, 160, 1)
+    Slider("Player Bar Width", "width", "Width of each player health bar.", 180, 420, 5)
+    Slider("Health Bar Height", "healthHeight", "Height of each player health bar.", 12, 42, 1)
+    Slider("Identity Line Height", "identityHeight", "Space reserved for name, level, and icons above each health bar.", 16, 32, 1)
+    Slider("Row Spacing", "rowSpacing", "Vertical spacing between player blocks.", 0, 24, 1)
+    Slider("Column Spacing", "columnSpacing", "Horizontal spacing between adaptive columns.", 0, 40, 1)
+    Slider("Opacity", "opacity", "Opacity of health fills and shield overlays.", 10, 100, 1)
+
+    Header("Roster & Names")
+    Dropdown("Display Order", "sortMode", "Role uses Tank, Healer, Damage, then Other. Level uses earned Champion Points in descending order.",
+        { "By Role", "By Name", "By Level", "By Class" }, { "role", "name", "level", "class" })
+    Dropdown("Display Name", "displayNameMode", "Chooses the primary player name. Sorting by name follows this choice.",
+        { "@ID", "Character Name" }, { "displayName", "characterName" })
+    Description("Companions remain attached beneath their owner and do not participate in player sorting.")
+
+    Header("Identity & Status Icons")
+    Checkbox("Show Class Icon", "showClassIcon", "Shows the player's class icon.")
+    Checkbox("Show Role Icon", "showRoleIcon", "Shows the player's selected group role. Roles are chosen by players and may not reflect their current build.")
+    Checkbox("Show Group Leader Icon", "showLeaderIcon", "Shows ESO's crown icon on the current group leader.")
+    Checkbox("Show Friend Icon", "showFriendIcon", "Shows F when the player's @ID is on your friend list.")
+    Checkbox("Show Shared Guild Icon", "showGuildIcon", "Shows G when the player's @ID belongs to at least one of your guilds.")
+    Description("Ready-check votes and target markers are always retained as core group status information.")
+
+    Header("Health & Colors")
+    Dropdown("Health Display", "healthTextMode", "Chooses the health value drawn over each bar.",
+        { "Number Only", "Percent Only", "Number + Percent" }, { "number", "percent", "both" })
+    Dropdown("Health Text Position", "healthTextPosition", "Places health text inside the bar.",
+        { "Left", "Center", "Right" }, { "left", "center", "right" })
+    Dropdown("Health Color", "healthColorMode", "Role and class use static colors. Percentage blends from white at full health to deep red at low health.",
+        { "By Role", "Static Red", "Health Percentage", "By Class" }, { "role", "static", "percentage", "class" })
+
+    local function RoleColorsDisabled()
+        return Disabled() or self:GetGroupFrames().healthColorMode ~= "role"
+    end
+    local function StaticColorDisabled()
+        return Disabled() or self:GetGroupFrames().healthColorMode ~= "static"
+    end
+    local function PercentageColorsDisabled()
+        return Disabled() or self:GetGroupFrames().healthColorMode ~= "percentage"
+    end
+    ColorPicker("Tank Color", "tankColor", "Health color for tanks.", RoleColorsDisabled)
+    ColorPicker("Healer Color", "healerColor", "Health color for healers.", RoleColorsDisabled)
+    ColorPicker("Damage Color", "damageColor", "Health color for damage dealers.", RoleColorsDisabled)
+    ColorPicker("Other Role Color", "otherColor", "Health color for missing or invalid group roles.", RoleColorsDisabled)
+    ColorPicker("Companion Color", "companionColor", "Health color used by compact companion subrows.")
+    ColorPicker("Static Health Color", "staticColor", "Single health color used by every player.", StaticColorDisabled)
+    ColorPicker("Full Health Color", "fullHealthColor", "Color at 100% health.", PercentageColorsDisabled)
+    ColorPicker("Low Health Color", "lowHealthColor", "Color at 0% health.", PercentageColorsDisabled)
+    ClassColorPicker("Dragonknight Color", 1)
+    ClassColorPicker("Sorcerer Color", 2)
+    ClassColorPicker("Nightblade Color", 3)
+    ClassColorPicker("Warden Color", 4)
+    ClassColorPicker("Necromancer Color", 5)
+    ClassColorPicker("Templar Color", 6)
+    ClassColorPicker("Arcanist Color", 117)
+    ColorPicker("Unknown Class Color", "unknownClassColor", "Fallback used for future or unavailable classes.", function()
+        return Disabled() or self:GetGroupFrames().healthColorMode ~= "class"
+    end)
+
+    Header("Bar Appearance")
+    Checkbox("Gloss", "glossEnabled", "Adds a restrained highlight over each health fill.")
+    Checkbox("Bar Pattern", "patternEnabled", "Adds a low-opacity texture over the filled health area.")
+    Dropdown("Pattern", "patternKey", "Selects the bar overlay texture.",
+        { "ZigZag", "Smoke", "Still Water", "Stone", "Dirt", "Lava", "Rock Lava", "Lava Wave", "Molten" },
+        { "ZigZag", "smoke", "stillwater", "Stone", "Dirt", "Lava", "RockLava", "LavaWave", "Molten" },
+        function() return Disabled() or self:GetGroupFrames().patternEnabled ~= true end)
+    Slider("Pattern Opacity", "patternOpacity", "Strength of the overlay pattern.", 0, 40, 1,
+        function() return Disabled() or self:GetGroupFrames().patternEnabled ~= true end)
+    Slider("Pattern Scale", "patternScale", "Tiling size of the overlay pattern.", 24, 256, 4,
+        function() return Disabled() or self:GetGroupFrames().patternEnabled ~= true end)
+    Slider("Black Border Width", "borderWidth", "Width of the black frame around every bar.", 0, 8, 1)
+    Slider("Corner Rounding", "cornerSize", "Rounds the frame edge; ESO status fills may remain square.", 0, 12, 1)
+    Slider("Inner Shadow", "innerShadowAlpha", "Darkens the inside edge of each bar.", 0, 100, 1)
+    Slider("Outer Shadow", "outerShadowAlpha", "Adds depth outside each bar.", 0, 100, 1)
+    Dropdown("Text Font", "textFontKey", "Font shared by names and health text.",
+        { "Game Small", "Game Medium", "Antique", "Trajan", "Univers", "Chat" },
+        { "gameSmall", "gameMedium", "antique", "trajan", "univers", "chat" })
+    Slider("Name Size", "nameTextSize", "Size of player names.", 10, 26, 1)
+    Slider("Health Text Size", "healthTextSize", "Size of health values.", 10, 26, 1)
+    Dropdown("Text Outline", "textOutline", "Outline used to keep compact text readable.",
+        { "None", "Soft Thin", "Soft Thick", "Thick Outline" },
+        { "none", "soft-shadow-thin", "soft-shadow-thick", "thick-outline" })
+    Slider("Text Opacity", "textOpacity", "Opacity of names, level values, and health text.", 10, 100, 1)
+    Slider("Health Text Inset", "textInset", "Moves left- or right-aligned health text inward from the bar edge.", 0, 24, 1)
+
+    Header("Effects & Shields")
+    Checkbox("Show Shields", "showShields", "Shows damage shields as an overlay capped to the health-bar width.")
+    Slider("Shield Fill Opacity", "shieldFillOpacity", "Opacity of the shield fill.", 0, 100, 1,
+        function() return Disabled() or self:GetGroupFrames().showShields == false end)
+    ColorPicker("Shield Fill Color", "shieldFillColor", "Color of the shield fill.",
+        function() return Disabled() or self:GetGroupFrames().showShields == false end)
+    Checkbox("Shield Glow", "shieldGlowEnabled", "Adds a soft highlight to active shields.",
+        function() return Disabled() or self:GetGroupFrames().showShields == false end)
+    Slider("Shield Glow Opacity", "shieldGlowOpacity", "Strength of the shield highlight.", 0, 100, 1,
+        function()
+            return Disabled() or self:GetGroupFrames().showShields == false or self:GetGroupFrames().shieldGlowEnabled == false
+        end)
+    ColorPicker("Shield Glow Color", "shieldGlowColor", "Color of shield gain feedback.",
+        function()
+            return Disabled() or self:GetGroupFrames().showShields == false or self:GetGroupFrames().shieldGlowEnabled == false
+        end)
+    Checkbox("Bar Feedback", "feedbackEnabled", "Enables low-health glow and shield gain pulses.")
+    Slider("Feedback Intensity", "feedbackIntensity", "Strength of health and shield feedback.", 0, 140, 5,
+        function() return Disabled() or self:GetGroupFrames().feedbackEnabled ~= true end)
+    Checkbox("Low Health Glow", "lowHealthGlowEnabled", "Shows a restrained edge glow below 35% health.",
+        function() return Disabled() or self:GetGroupFrames().feedbackEnabled ~= true end)
+    Checkbox("Recovery Rhythm (Approx.)", "showRecoveryRhythm", "Sweeps a faint glint across health bars every two seconds. This is decorative: ESO does not expose the authoritative server recovery phase.")
+    Checkbox("Death Animation", "showDeathAnimation", "Plays a brief crimson flash and scale dip on an alive-to-dead transition, then leaves a death icon.")
+    Add(
+    {
+        type = "button",
+        name = "Replay Preview Effects",
+        tooltip = "Replays shield, health, recovery, and death feedback on the live settings preview.",
+        func = function() self:ReplayGroupFramesPreviewEffects() end,
+        disabled = Disabled,
+        width = "half",
+    })
+
+    Header("Level Text")
+    Checkbox("Show Level", "showLevel", "Shows the character level or actual earned Champion Points.")
+    Checkbox("Level Style", "showLevelStyle", "Applies tier colors, CP 2000+ gradients, glyph-only shimmer, and a restrained glow pulse. When disabled, level text remains visible in plain white.",
+        function() return Disabled() or self:GetGroupFrames().showLevel == false end)
+    Description("With Level Style enabled, levels through CP 1999 use solid tier colors with no animation. CP 2000+ uses restrained three-color text gradients, a left-to-right shimmer sweep, and a subtle glyph glow pulse, culminating in a vivid prismatic CP 3600 treatment.")
+
+    return controls
+end
+
 function Settings:RegisterAddonMenu()
     local LAM = LibAddonMenu2
     if not LAM and LibStub then
@@ -1530,7 +2024,7 @@ function Settings:RegisterAddonMenu()
         name = ADDON_DISPLAY_NAME,
         displayName = ADDON_DISPLAY_NAME,
         author = "Wrynch",
-        version = "1.0.1",
+        version = "1.2.0",
         registerForRefresh = true,
         registerForDefaults = true,
     }
@@ -2812,6 +3306,13 @@ function Settings:RegisterAddonMenu()
         },
         {
             type = "submenu",
+            name = "Group Frames",
+            tooltip = "Replace ESO's group and raid frames with compact, sortable Nirnsteel frames.",
+            reference = "Nirnsteel_UI_GroupFramesSubmenu",
+            controls = self:BuildGroupFramesOptions(),
+        },
+        {
+            type = "submenu",
             name = "Resource Bars",
             tooltip = "Customize the centered health, magicka, and stamina bars.",
             reference = "Nirnsteel_UI_ResourceBarsSubmenu",
@@ -3388,6 +3889,7 @@ function Settings:RegisterAddonMenu()
     LAM:RegisterOptionControls(panelName, options)
     self:HookResourceBarsSubmenuPreview(panelName)
     self:HookGroupCalloutsSubmenuPreview(panelName)
+    self:HookGroupFramesSubmenuPreview(panelName)
 end
 
 local function OnAddOnLoaded(_, addonName)
