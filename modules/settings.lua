@@ -320,6 +320,15 @@ local ACCOUNT_DEFAULTS =
             maxActive = 20,
             soundThrottleMS = 40,
             savedSctSettings = {},
+            damageDoneMinigame =
+            {
+                enabled = false,
+                unlocked = false,
+                scale = 100,
+                soundEnabled = true,
+                faceRight = false,
+                displayMode = "damageDone",
+            },
         },
         killSound =
         {
@@ -449,6 +458,11 @@ local SERVER_DEFAULTS =
                 {
                     x = 0,
                     y = -45,
+                    minigame =
+                    {
+                        x = 470,
+                        y = 250,
+                    },
                 },
                 experienceTracker =
                 {
@@ -882,6 +896,14 @@ function Settings:GetDamageNumbersPosition()
     return self.server.modules.damageNumbers
 end
 
+function Settings:GetDamageDoneMinigame()
+    return self:GetDamageNumbers().damageDoneMinigame
+end
+
+function Settings:GetDamageDoneMinigamePosition()
+    return self:GetDamageNumbersPosition().minigame
+end
+
 function Settings:GetKillSound()
     return self.account.modules.killSound
 end
@@ -1036,6 +1058,18 @@ function Settings:AreDamageNumberCritSoundsEnabled()
     return self:GetDamageNumbers().critSoundEnabled
 end
 
+function Settings:IsDamageDoneMinigameEnabled()
+    return self:GetDamageDoneMinigame().enabled
+end
+
+function Settings:IsDamageDoneMinigameUnlocked()
+    return self:GetDamageDoneMinigame().unlocked
+end
+
+function Settings:AreDamageDoneMinigameSoundsEnabled()
+    return self:GetDamageDoneMinigame().soundEnabled
+end
+
 function Settings:SetDamageNumbersEnabled(value)
     self:GetDamageNumbers().enabled = value
     if Nirnsteel_UI.DamageNumbers then
@@ -1074,6 +1108,33 @@ end
 
 function Settings:SetDamageNumbersPosition(x, y)
     local position = self:GetDamageNumbersPosition()
+    position.x = x
+    position.y = y
+end
+
+function Settings:SetDamageDoneMinigameEnabled(value)
+    self:GetDamageDoneMinigame().enabled = value
+    if Nirnsteel_UI.DamageNumbers then
+        Nirnsteel_UI.DamageNumbers:RefreshSettings()
+    end
+end
+
+function Settings:SetDamageDoneMinigameUnlocked(value)
+    self:GetDamageDoneMinigame().unlocked = value
+    if Nirnsteel_UI.DamageNumbers then
+        Nirnsteel_UI.DamageNumbers:RefreshSettings()
+    end
+end
+
+function Settings:SetDamageDoneMinigameValue(key, value)
+    self:GetDamageDoneMinigame()[key] = value
+    if Nirnsteel_UI.DamageNumbers then
+        Nirnsteel_UI.DamageNumbers:RefreshSettings()
+    end
+end
+
+function Settings:SetDamageDoneMinigamePosition(x, y)
+    local position = self:GetDamageDoneMinigamePosition()
     position.x = x
     position.y = y
 end
@@ -1253,6 +1314,12 @@ end
 function Settings:PreviewDamageNumberCritSound()
     if Nirnsteel_UI.DamageNumbers and Nirnsteel_UI.DamageNumbers.PreviewCriticalSound then
         Nirnsteel_UI.DamageNumbers:PreviewCriticalSound()
+    end
+end
+
+function Settings:PreviewDamageDoneMinigame()
+    if Nirnsteel_UI.DamageNumbers and Nirnsteel_UI.DamageNumbers.PreviewDamageDoneMinigame then
+        Nirnsteel_UI.DamageNumbers:PreviewDamageDoneMinigame()
     end
 end
 
@@ -2087,7 +2154,7 @@ function Settings:RegisterAddonMenu()
         name = ADDON_DISPLAY_NAME,
         displayName = ADDON_DISPLAY_NAME,
         author = "Wrynch",
-        version = "1.2.0",
+        version = "1.3.0",
         registerForRefresh = true,
         registerForDefaults = true,
     }
@@ -2164,7 +2231,7 @@ function Settings:RegisterAddonMenu()
             {
                 {
                     type = "checkbox",
-                    name = "Enable Damage Numbers",
+                    name = "Enable Floating Damage Numbers",
                     tooltip = "Show Nirnsteel's damage numbers near the middle of your screen.",
                     getFunc = function() return self:IsDamageNumbersEnabled() end,
                     setFunc = function(value) self:SetDamageNumbersEnabled(value) end,
@@ -2172,7 +2239,7 @@ function Settings:RegisterAddonMenu()
                 },
                 {
                     type = "checkbox",
-                    name = "Unlock Damage Number Origin",
+                    name = "Unlock Floating Damage Origin",
                     tooltip = "Show a drag handle for where damage numbers pop up. Its position is saved on this server.",
                     getFunc = function() return self:IsDamageNumbersUnlocked() end,
                     setFunc = function(value) self:SetDamageNumbersUnlocked(value) end,
@@ -2385,6 +2452,78 @@ function Settings:RegisterAddonMenu()
                     setFunc = function(value) self:SetDamageNumberValue("soundThrottleMS", value) end,
                     disabled = function() return not self:IsDamageNumbersEnabled() or not self:AreDamageNumberCritSoundsEnabled() end,
                     default = ACCOUNT_DEFAULTS.modules.damageNumbers.soundThrottleMS,
+                },
+                {
+                    type = "header",
+                    name = "Damage Done Minigame",
+                },
+                {
+                    type = "description",
+                    text = "Chain player and pet damage into a fast-draining arcade score. Critical hits and damage milestones trigger stronger fantasy impact effects.",
+                },
+                {
+                    type = "checkbox",
+                    name = "Enable Damage Done Minigame",
+                    tooltip = "Show a separate accumulated damage score. This can run without floating damage numbers.",
+                    getFunc = function() return self:IsDamageDoneMinigameEnabled() end,
+                    setFunc = function(value) self:SetDamageDoneMinigameEnabled(value) end,
+                    default = ACCOUNT_DEFAULTS.modules.damageNumbers.damageDoneMinigame.enabled,
+                },
+                {
+                    type = "checkbox",
+                    name = "Unlock Damage Done Minigame",
+                    tooltip = "Show a drag handle for the minigame. Its position is saved on this server.",
+                    getFunc = function() return self:IsDamageDoneMinigameUnlocked() end,
+                    setFunc = function(value) self:SetDamageDoneMinigameUnlocked(value) end,
+                    disabled = function() return not self:IsDamageDoneMinigameEnabled() end,
+                    default = ACCOUNT_DEFAULTS.modules.damageNumbers.damageDoneMinigame.unlocked,
+                },
+                {
+                    type = "checkbox",
+                    name = "Minigame Sounds",
+                    tooltip = "Play throttled rune ticks, heavier critical impacts, and milestone sounds.",
+                    getFunc = function() return self:AreDamageDoneMinigameSoundsEnabled() end,
+                    setFunc = function(value) self:SetDamageDoneMinigameValue("soundEnabled", value) end,
+                    disabled = function() return not self:IsDamageDoneMinigameEnabled() end,
+                    default = ACCOUNT_DEFAULTS.modules.damageNumbers.damageDoneMinigame.soundEnabled,
+                },
+                {
+                    type = "checkbox",
+                    name = "Face Right",
+                    tooltip = "Reverse the number's tilt, skew, and decorative accents so it faces right.",
+                    getFunc = function() return self:GetDamageDoneMinigame().faceRight end,
+                    setFunc = function(value) self:SetDamageDoneMinigameValue("faceRight", value) end,
+                    disabled = function() return not self:IsDamageDoneMinigameEnabled() end,
+                    default = ACCOUNT_DEFAULTS.modules.damageNumbers.damageDoneMinigame.faceRight,
+                },
+                {
+                    type = "dropdown",
+                    name = "Display Mode",
+                    tooltip = "Show the current fast-draining damage total, or average damage per second across the active combo streak.",
+                    choices = { "Damage Done", "DPS" },
+                    choicesValues = { "damageDone", "dps" },
+                    getFunc = function() return self:GetDamageDoneMinigame().displayMode end,
+                    setFunc = function(value) self:SetDamageDoneMinigameValue("displayMode", value) end,
+                    disabled = function() return not self:IsDamageDoneMinigameEnabled() end,
+                    default = ACCOUNT_DEFAULTS.modules.damageNumbers.damageDoneMinigame.displayMode,
+                },
+                {
+                    type = "slider",
+                    name = "Minigame Scale",
+                    min = 60,
+                    max = 180,
+                    step = 1,
+                    getFunc = function() return self:GetDamageDoneMinigame().scale end,
+                    setFunc = function(value) self:SetDamageDoneMinigameValue("scale", value) end,
+                    disabled = function() return not self:IsDamageDoneMinigameEnabled() end,
+                    default = ACCOUNT_DEFAULTS.modules.damageNumbers.damageDoneMinigame.scale,
+                },
+                {
+                    type = "button",
+                    name = "Preview Damage Done Minigame",
+                    tooltip = "Play a short normal-hit, pet-hit, critical-hit, and drain sequence.",
+                    func = function() self:PreviewDamageDoneMinigame() end,
+                    disabled = function() return not self:IsDamageDoneMinigameEnabled() end,
                 },
             },
         },
