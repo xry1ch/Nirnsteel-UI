@@ -8,6 +8,7 @@ local GroupFrames = {}
 Nirnsteel_UI.GroupFrames = GroupFrames
 
 local BarVisuals = Nirnsteel_UI.BarVisuals
+local LevelVisuals = Nirnsteel_UI.LevelVisuals
 local MAX_GROUP_ROWS = MAX_GROUP_SIZE_THRESHOLD or 24
 local HEALTH_POWER_TYPE = COMBAT_MECHANIC_FLAGS_HEALTH
 local PLAYER_DEFAULT_POSITION = { keyboard = { x = 28, y = 100 }, gamepad = { x = 70, y = 55 } }
@@ -18,7 +19,7 @@ local COMPANION_BAR_HEIGHT = 12
 local STATUS_ICON_SIZE = 16
 local ROSTER_REFRESH_DELAY_MS = 50
 local RECOVERY_CADENCE_MS = 2000
-local LEVEL_SHIMMER_CADENCE_MS = 4200
+local LEVEL_SHIMMER_CADENCE_MS = LevelVisuals.SHIMMER_CADENCE_MS
 
 local DEFAULT_SETTINGS =
 {
@@ -97,74 +98,6 @@ local READY_CHECK_ICONS =
     [GROUP_VOTE_CHOICE_FOR] = "EsoUI/Art/UnitFrames/votedIcon_yes.dds",
     [GROUP_VOTE_CHOICE_AGAINST] = "EsoUI/Art/UnitFrames/votedIcon_no.dds",
     [GROUP_VOTE_CHOICE_INVALID] = "EsoUI/Art/UnitFrames/votedIcon_notYet.dds",
-}
-
-local CP_TIERS =
-{
-    {
-        maximum = 0,
-        textColor = { r = 0.68, g = 0.75, b = 0.84 },
-    },
-    {
-        maximum = 599,
-        textColor = { r = 0.96, g = 0.66, b = 0.34 },
-    },
-    {
-        maximum = 1199,
-        textColor = { r = 0.88, g = 0.93, b = 0.98 },
-    },
-    {
-        maximum = 1799,
-        textColor = { r = 1.00, g = 0.82, b = 0.30 },
-    },
-    {
-        maximum = 1999,
-        textColor = { r = 0.88, g = 0.68, b = 1.00 },
-    },
-    {
-        maximum = 2399,
-        textStops =
-        {
-            { r = 0.62, g = 0.28, b = 1.00 },
-            { r = 1.00, g = 0.14, b = 0.58 },
-            { r = 1.00, g = 0.72, b = 0.14 },
-        },
-        shimmer = 0.48,
-        glowPulse = 0.18,
-    },
-    {
-        maximum = 2999,
-        textStops =
-        {
-            { r = 0.00, g = 0.92, b = 0.62 },
-            { r = 0.00, g = 0.96, b = 1.00 },
-            { r = 0.70, g = 0.22, b = 1.00 },
-        },
-        shimmer = 0.56,
-        glowPulse = 0.22,
-    },
-    {
-        maximum = 3599,
-        textStops =
-        {
-            { r = 1.00, g = 0.35, b = 0.00 },
-            { r = 1.00, g = 1.00, b = 0.66 },
-            { r = 1.00, g = 0.12, b = 0.76 },
-        },
-        shimmer = 0.64,
-        glowPulse = 0.26,
-    },
-    {
-        maximum = math.huge,
-        textStops =
-        {
-            { r = 0.00, g = 0.94, b = 1.00 },
-            { r = 1.00, g = 0.08, b = 0.68 },
-            { r = 1.00, g = 0.84, b = 0.12 },
-        },
-        shimmer = 0.78,
-        glowPulse = 0.34,
-    },
 }
 
 local PREVIEW_NAMES =
@@ -494,18 +427,6 @@ local function SortRoster(roster)
     end)
 end
 
-local function GetLevelTier(data)
-    if not data.champion then
-        return 1, CP_TIERS[1]
-    end
-    for index = 2, #CP_TIERS do
-        if data.championPoints <= CP_TIERS[index].maximum then
-            return index, CP_TIERS[index]
-        end
-    end
-    return #CP_TIERS, CP_TIERS[#CP_TIERS]
-end
-
 local function GetRoleColor(role)
     if role == LFG_ROLE_TANK then
         return CopyColor(GetSetting("tankColor"), DEFAULT_SETTINGS.tankColor)
@@ -678,52 +599,13 @@ local function CreateMemberRow(parent, index)
     row.classIcon = WINDOW_MANAGER:CreateControl(nil, row.player, CT_TEXTURE)
     row.classIcon:SetDimensions(STATUS_ICON_SIZE, STATUS_ICON_SIZE)
 
-    row.levelControl = WINDOW_MANAGER:CreateControl(nil, row.player, CT_CONTROL)
-    row.levelControl:SetDimensions(42, 18)
-
-    row.levelLabel = WINDOW_MANAGER:CreateControl(nil, row.levelControl, CT_LABEL)
-    row.levelLabel:SetAnchorFill(row.levelControl)
-    row.levelLabel:SetFont("$(BOLD_FONT)|13|outline")
-    row.levelLabel:SetHorizontalAlignment(TEXT_ALIGN_CENTER)
-    row.levelLabel:SetVerticalAlignment(TEXT_ALIGN_CENTER)
-    row.levelLabel:SetModifyTextType(MODIFY_TEXT_TYPE_NONE)
-    row.levelLabel:SetColor(1, 1, 1, 1)
-    row.levelLabel:SetDrawLayer(DL_OVERLAY)
-    row.levelLabel:SetDrawLevel(5)
-
-    row.levelShimmerClip = WINDOW_MANAGER:CreateControl(nil, row.levelControl, CT_CONTROL)
-    row.levelShimmerClip:SetDimensions(10, 18)
-    row.levelShimmerClip:SetAutoRectClipChildren(true)
-    row.levelShimmerClip:SetDrawLayer(DL_OVERLAY)
-    row.levelShimmerClip:SetDrawLevel(6)
-    row.levelShimmerClip:SetAlpha(0)
-    row.levelShimmerClip:SetHidden(true)
-
-    row.levelShimmerContent = WINDOW_MANAGER:CreateControl(nil, row.levelShimmerClip, CT_CONTROL)
-    row.levelShimmerContent:SetDimensions(42, 18)
-    row.levelShimmerContent:SetAnchor(TOPLEFT, row.levelShimmerClip, TOPLEFT, 0, 0)
-
-    row.levelGlow = WINDOW_MANAGER:CreateControl(nil, row.levelShimmerContent, CT_LABEL)
-    row.levelGlow:SetAnchorFill(row.levelShimmerContent)
-    row.levelGlow:SetFont("$(BOLD_FONT)|14|soft-shadow-thick")
-    row.levelGlow:SetHorizontalAlignment(TEXT_ALIGN_CENTER)
-    row.levelGlow:SetVerticalAlignment(TEXT_ALIGN_CENTER)
-    row.levelGlow:SetModifyTextType(MODIFY_TEXT_TYPE_NONE)
-    row.levelGlow:SetColor(1, 1, 1, 1)
-    row.levelGlow:SetDrawLayer(DL_OVERLAY)
-    row.levelGlow:SetDrawLevel(5)
-    row.levelGlow:SetAlpha(0)
-
-    row.levelShimmer = WINDOW_MANAGER:CreateControl(nil, row.levelShimmerContent, CT_LABEL)
-    row.levelShimmer:SetAnchorFill(row.levelShimmerContent)
-    row.levelShimmer:SetFont("$(BOLD_FONT)|13|outline")
-    row.levelShimmer:SetHorizontalAlignment(TEXT_ALIGN_CENTER)
-    row.levelShimmer:SetVerticalAlignment(TEXT_ALIGN_CENTER)
-    row.levelShimmer:SetModifyTextType(MODIFY_TEXT_TYPE_NONE)
-    row.levelShimmer:SetColor(1, 1, 1, 1)
-    row.levelShimmer:SetDrawLayer(DL_OVERLAY)
-    row.levelShimmer:SetDrawLevel(6)
-    row.levelShimmer:SetAlpha(1)
+    row.levelBadge = LevelVisuals:Create(row.player)
+    row.levelControl = row.levelBadge.control
+    row.levelLabel = row.levelBadge.label
+    row.levelShimmerClip = row.levelBadge.clip
+    row.levelShimmerContent = row.levelBadge.content
+    row.levelGlow = row.levelBadge.glow
+    row.levelShimmer = row.levelBadge.shimmer
 
     row.nameLabel = WINDOW_MANAGER:CreateControl(nil, row.player, CT_LABEL)
     row.nameLabel:SetWrapMode(TEXT_WRAP_MODE_ELLIPSIS)
@@ -833,182 +715,26 @@ function GroupFrames:GetMover()
     return mover
 end
 
-local function ColorChannelToHex(value)
-    return math.floor((Clamp(value, 0, 1) * 255) + 0.5)
-end
-
-local function SampleLevelPalette(stops, progress)
-    local stopCount = stops and #stops or 0
-    if stopCount == 0 then
-        return { r = 1, g = 1, b = 1 }
-    elseif stopCount == 1 then
-        return stops[1]
-    end
-    local paletteIndex = math.floor((Clamp(progress, 0, 1) * (stopCount - 1)) + 0.5) + 1
-    return stops[math.min(paletteIndex, stopCount)]
-end
-
-local function GetLevelGlyphColor(tier, progress, shimmer)
-    if tier.textColor then
-        return tier.textColor
-    end
-    local stops = tier.textStops
-    if stops then
-        return SampleLevelPalette(stops, progress)
-    end
-    if tier.textMid then
-        if progress <= 0.5 then
-            return InterpolateColor(tier.textStart, tier.textMid, progress * 2)
-        end
-        return InterpolateColor(tier.textMid, tier.textEnd, (progress - 0.5) * 2)
-    end
-    return InterpolateColor(tier.textStart, tier.textEnd, progress)
-end
-
-local function BuildGradientLevelText(plainText, tier, shimmer)
-    local glyphCount = #plainText
-    local coloredGlyphs = {}
-    for index = 1, glyphCount do
-        local progress = glyphCount > 1 and ((index - 1) / (glyphCount - 1)) or 0.5
-        local color = GetLevelGlyphColor(tier, progress, shimmer)
-        if shimmer then
-            color = InterpolateColor(color, { r = 1, g = 1, b = 1 }, 0.78)
-        end
-        coloredGlyphs[index] = string.format(
-            "|c%02X%02X%02X%s|r",
-            ColorChannelToHex(color.r),
-            ColorChannelToHex(color.g),
-            ColorChannelToHex(color.b),
-            string.sub(plainText, index, index))
-    end
-    return table.concat(coloredGlyphs)
-end
-
 local function PlayLevelShimmer(row)
-    local shimmer = row and row.levelShimmer
-    local shimmerClip = row and row.levelShimmerClip
-    local glow = row and row.levelGlow
-    local intensity = row and row.levelShimmerIntensity or 0
-    if not shimmer or not shimmerClip or intensity <= 0 or row.levelControl:IsHidden() then
-        return
+    if row and row.levelBadge then
+        LevelVisuals:Play(row.levelBadge)
     end
-
-    if not row.levelShimmerTimeline then
-        local timeline = ANIMATION_MANAGER:CreateTimeline()
-        local sweep = timeline:InsertAnimation(ANIMATION_TRANSLATE, shimmerClip, 0)
-        sweep:SetDuration(720)
-        sweep:SetTranslateOffsets(0, 0, 1, 0)
-        local counterSweep = timeline:InsertAnimation(ANIMATION_TRANSLATE, row.levelShimmerContent, 0)
-        counterSweep:SetDuration(720)
-        counterSweep:SetTranslateOffsets(0, 0, -1, 0)
-        local sweepFadeIn = timeline:InsertAnimation(ANIMATION_ALPHA, shimmerClip, 0)
-        sweepFadeIn:SetDuration(100)
-        sweepFadeIn:SetAlphaValues(0, 1)
-        if ZO_EaseOutQuadratic then
-            sweepFadeIn:SetEasingFunction(ZO_EaseOutQuadratic)
-        end
-        local sweepFadeOut = timeline:InsertAnimation(ANIMATION_ALPHA, shimmerClip, 560)
-        sweepFadeOut:SetDuration(160)
-        sweepFadeOut:SetAlphaValues(1, 0)
-        if ZO_EaseInOutQuadratic then
-            sweepFadeOut:SetEasingFunction(ZO_EaseInOutQuadratic)
-        end
-        local glowBrighten = timeline:InsertAnimation(ANIMATION_ALPHA, glow, 0)
-        glowBrighten:SetDuration(240)
-        glowBrighten:SetAlphaValues(0, 1)
-        if ZO_EaseOutQuadratic then
-            glowBrighten:SetEasingFunction(ZO_EaseOutQuadratic)
-        end
-        local glowFade = timeline:InsertAnimation(ANIMATION_ALPHA, glow, 240)
-        glowFade:SetDuration(680)
-        glowFade:SetAlphaValues(1, 0)
-        if ZO_EaseInOutQuadratic then
-            glowFade:SetEasingFunction(ZO_EaseInOutQuadratic)
-        end
-        timeline:SetHandler("OnStop", function()
-            shimmerClip:SetAlpha(0)
-            shimmerClip:SetHidden(true)
-            glow:SetAlpha(0)
-            glow:SetHidden(true)
-        end)
-        row.levelShimmerTimeline = timeline
-        row.levelShimmerSweep = sweep
-        row.levelShimmerCounterSweep = counterSweep
-        row.levelShimmerSweepFadeIn = sweepFadeIn
-        row.levelShimmerSweepFadeOut = sweepFadeOut
-        row.levelGlowBrighten = glowBrighten
-        row.levelGlowFade = glowFade
-    end
-
-    local width = row.levelControl:GetWidth()
-    local bandWidth = Clamp(width * 0.24, 7, 11)
-    shimmerClip:ClearAnchors()
-    shimmerClip:SetAnchor(TOPLEFT, row.levelControl, TOPLEFT, 0, 0)
-    shimmerClip:SetDimensions(bandWidth, 18)
-    shimmerClip:SetHidden(false)
-    shimmerClip:SetAlpha(0)
-    row.levelShimmerContent:ClearAnchors()
-    row.levelShimmerContent:SetAnchor(TOPLEFT, shimmerClip, TOPLEFT, 0, 0)
-    row.levelShimmerContent:SetDimensions(width, 18)
-    shimmer:SetAlpha(intensity)
-    glow:SetHidden(false)
-    glow:SetAlpha(0)
-    row.levelShimmerSweep:SetTranslateOffsets(-bandWidth, 0, width, 0)
-    row.levelShimmerCounterSweep:SetTranslateOffsets(bandWidth, 0, -width, 0)
-    local glowIntensity = row.levelGlowIntensity or 0
-    row.levelGlowBrighten:SetAlphaValues(0, glowIntensity)
-    row.levelGlowFade:SetAlphaValues(glowIntensity, 0)
-    row.levelShimmerTimeline:SetPlaybackType(ANIMATION_PLAYBACK_ONE_SHOT, 0)
-    row.levelShimmerTimeline:PlayFromStart()
 end
 
 local function ApplyLevelBadge(row, data)
-    local shown = GetSetting("showLevel") ~= false
-    row.levelControl:SetHidden(not shown)
-    if not shown then
-        row.levelShimmerIntensity = 0
-        row.levelGlowIntensity = 0
-        if row.levelShimmerTimeline then
-            row.levelShimmerTimeline:Stop()
-        end
-        row.levelShimmerClip:SetHidden(true)
-        row.levelGlow:SetHidden(true)
-        return 0
+    local width, tierIndex = LevelVisuals:Apply(row.levelBadge, data,
+    {
+        shown = GetSetting("showLevel") ~= false,
+        styled = GetSetting("showLevelStyle") ~= false,
+        playOnTierUpgrade = row.sameIdentity == true,
+        previousTier = row.levelTier,
+    })
+    row.levelShimmerIntensity = row.levelBadge.shimmerIntensity or 0
+    row.levelGlowIntensity = row.levelBadge.glowIntensity or 0
+    row.levelShimmerTimeline = row.levelBadge.timeline
+    if tierIndex then
+        row.levelTier = tierIndex
     end
-    local tierIndex, tier = GetLevelTier(data)
-    local text = data.champion and tostring(data.championPoints) or string.format("L%d", data.level)
-    row.levelLabel:SetText(text)
-    local width = math.max(34, math.min((row.levelLabel:GetTextWidth() or 30) + 10, 64))
-    row.levelControl:SetDimensions(width, 18)
-    local styled = GetSetting("showLevelStyle") ~= false
-    if styled then
-        row.levelLabel:SetText(BuildGradientLevelText(text, tier, false))
-        local effectEligible = data.champion and data.championPoints >= 2000
-        local effectText = effectEligible and BuildGradientLevelText(text, tier, true) or ""
-        row.levelShimmer:SetText(effectText)
-        row.levelGlow:SetText(effectText)
-        row.levelShimmerIntensity = effectEligible and (tier.shimmer or 0) or 0
-        row.levelGlowIntensity = effectEligible and (tier.glowPulse or 0) or 0
-    else
-        row.levelLabel:SetText(text)
-        row.levelLabel:SetColor(1, 1, 1, 1)
-        row.levelShimmer:SetText("")
-        row.levelGlow:SetText("")
-        row.levelShimmerIntensity = 0
-        row.levelGlowIntensity = 0
-    end
-    local hasEffects = row.levelShimmerIntensity > 0 or row.levelGlowIntensity > 0
-    if not hasEffects and row.levelShimmerTimeline then
-        row.levelShimmerTimeline:Stop()
-    end
-    if not hasEffects then
-        row.levelShimmerClip:SetHidden(true)
-        row.levelGlow:SetHidden(true)
-    end
-    if styled and row.sameIdentity and row.levelTier and tierIndex > row.levelTier and hasEffects then
-        PlayLevelShimmer(row)
-    end
-    row.levelTier = tierIndex
     return width
 end
 

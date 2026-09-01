@@ -22,6 +22,7 @@ local MODULE_MENU_ICONS =
     ["Kill Sound"] = "EsoUI/Art/Options/Gamepad/gp_options_audio.dds",
     ["Loot History"] = "EsoUI/Art/AddOns/Gamepad/gp_mod_listing_category_bankandinventory.dds",
     ["Resource Bars"] = "EsoUI/Art/AddOns/Gamepad/gp_mod_listing_category_uigraphics.dds",
+    ["Target Frame"] = "EsoUI/Art/AddOns/Gamepad/gp_mod_listing_category_unitframes.dds",
 }
 
 local function ConfigureModuleMenuOptions(options)
@@ -289,6 +290,74 @@ local GROUP_FRAMES_DEFAULTS =
     unknownClassColor = { r = 0.54, g = 0.59, b = 0.66 },
 }
 
+local TARGET_FRAME_DEFAULTS =
+{
+    enabled = true,
+    unlocked = false,
+    scale = 100,
+    width = 300,
+    barHeight = 25,
+    opacity = 100,
+    glossEnabled = true,
+    barPatternEnabled = true,
+    barPatternKey = "Molten",
+    barPatternOpacity = 6,
+    barPatternScale = 228,
+    feedbackEnabled = true,
+    feedbackIntensity = 95,
+    lossTrailEnabled = false,
+    gainPulseEnabled = true,
+    spendPulseEnabled = true,
+    fullResourcePulseEnabled = true,
+    shieldPulseEnabled = true,
+    lowResourceGlowEnabled = true,
+    borderWidth = 0,
+    cornerSize = 2,
+    innerShadowAlpha = 60,
+    outerShadowAlpha = 100,
+    textFontKey = "gameSmall",
+    nameTextSize = 20,
+    healthTextSize = 18,
+    textOutline = "thick-outline",
+    textOpacity = 100,
+    textInset = 6,
+    textVerticalOffset = 3,
+    textColor = { r = 0.96, g = 0.92, b = 0.82 },
+    healthTextFormat = "numberAndPercent",
+    healthTextPosition = "sides",
+    shieldOverlayEnabled = true,
+    shieldTextMode = "healthAndShield",
+    shieldFillOpacity = 70,
+    shieldFillColor = { r = 0.95, g = 0.60, b = 0.33 },
+    shieldGlowEnabled = true,
+    shieldGlowOpacity = 65,
+    shieldGlowColor = { r = 0.95, g = 0.66, b = 0.56 },
+    npcColorMode = "static",
+    playerColorMode = "static",
+    staticColor = { r = 0.78, g = 0.06, b = 0.08 },
+    fullHealthColor = { r = 1.00, g = 1.00, b = 1.00 },
+    lowHealthColor = { r = 0.58, g = 0.015, b = 0.025 },
+    showClass = true,
+    showLevel = true,
+    showLevelStyle = true,
+    showVeterancyIcon = false,
+    showExecuteIcon = true,
+    executeIconStyle = "crossedWeapons",
+    executeThreshold = 18,
+    executePosition = "center",
+    classColors =
+    {
+        [1] = { r = 0.85, g = 0.47, b = 0.17 },
+        [2] = { r = 0.54, g = 0.39, b = 0.84 },
+        [3] = { r = 0.70, g = 0.23, b = 0.28 },
+        [4] = { r = 0.26, g = 0.66, b = 0.54 },
+        [5] = { r = 0.40, g = 0.54, b = 0.66 },
+        [6] = { r = 0.88, g = 0.75, b = 0.33 },
+        [117] = { r = 0.25, g = 0.72, b = 0.47 },
+    },
+    unknownClassColor = { r = 0.54, g = 0.59, b = 0.66 },
+}
+
 local ACCOUNT_DEFAULTS =
 {
     debugMode = false,
@@ -298,6 +367,7 @@ local ACCOUNT_DEFAULTS =
         {
             enabled = true,
             unlocked = false,
+            scale = 100,
             soundsEnabled = true,
             regularSoundKey = "TRIBUTE_AGENT_HEALED",
             filterExperience = false,
@@ -388,6 +458,7 @@ local ACCOUNT_DEFAULTS =
             hideStockProgressBar = true,
         },
         groupFrames = GROUP_FRAMES_DEFAULTS,
+        targetFrame = TARGET_FRAME_DEFAULTS,
         resourceBars =
         {
             enabled = true,
@@ -478,6 +549,11 @@ local SERVER_DEFAULTS =
                 {
                     keyboard = { custom = false, x = 28, y = 100 },
                     gamepad = { custom = false, x = 70, y = 55 },
+                },
+                targetFrame =
+                {
+                    x = 0,
+                    y = 88,
                 },
                 castBar =
                 {
@@ -961,6 +1037,14 @@ function Settings:GetGroupFramesPosition(mode)
     return self.server.modules.groupFrames[mode]
 end
 
+function Settings:GetTargetFrame()
+    return self.account.modules.targetFrame
+end
+
+function Settings:GetTargetFramePosition()
+    return self.server.modules.targetFrame
+end
+
 function Settings:GetHardcoreSupport()
     return self.character.hardcoreSupport
 end
@@ -979,6 +1063,7 @@ function Settings:SetDebugModeEnabled(value)
         Nirnsteel_UI.ExperienceTracker,
         Nirnsteel_UI.ResourceBars,
         Nirnsteel_UI.GroupFrames,
+        Nirnsteel_UI.TargetFrame,
         Nirnsteel_UI.CastBar,
         Nirnsteel_UI.GroupCallouts,
     }
@@ -1030,6 +1115,9 @@ function Settings:SetLootHistoryValue(key, value)
     end
 
     self:GetLootHistory()[key] = value
+    if key == "scale" and Nirnsteel_UI.LootHistory then
+        Nirnsteel_UI.LootHistory:RefreshSettings()
+    end
 end
 
 function Settings:SetLootHistoryFilterExperience(value)
@@ -1734,6 +1822,102 @@ function Settings:SetGroupFramesSettingsPreviewActive(active)
     end
 end
 
+function Settings:IsTargetFrameEnabled()
+    return self:GetTargetFrame().enabled ~= false
+end
+
+function Settings:IsTargetFrameUnlocked()
+    return self:IsTargetFrameEnabled() and self:GetTargetFrame().unlocked == true
+end
+
+function Settings:SetTargetFrameEnabled(value)
+    self:GetTargetFrame().enabled = value == true
+    if Nirnsteel_UI.TargetFrame then
+        Nirnsteel_UI.TargetFrame:RefreshSettings()
+    end
+end
+
+function Settings:SetTargetFrameUnlocked(value)
+    self:GetTargetFrame().unlocked = value == true
+    if Nirnsteel_UI.TargetFrame and Nirnsteel_UI.TargetFrame.SetUnlocked then
+        Nirnsteel_UI.TargetFrame:SetUnlocked(value)
+    elseif Nirnsteel_UI.TargetFrame then
+        Nirnsteel_UI.TargetFrame:RefreshSettings()
+    end
+end
+
+function Settings:SetTargetFrameValue(key, value)
+    self:GetTargetFrame()[key] = value
+    if Nirnsteel_UI.TargetFrame then
+        Nirnsteel_UI.TargetFrame:RefreshSettings()
+    end
+end
+
+function Settings:GetTargetFrameColor(key)
+    return self:GetTargetFrame()[key] or TARGET_FRAME_DEFAULTS[key]
+end
+
+function Settings:SetTargetFrameColor(key, r, g, b)
+    local settings = self:GetTargetFrame()
+    settings[key] = settings[key] or {}
+    settings[key].r = r
+    settings[key].g = g
+    settings[key].b = b
+    if Nirnsteel_UI.TargetFrame then
+        Nirnsteel_UI.TargetFrame:RefreshSettings()
+    end
+end
+
+function Settings:GetTargetFrameClassColor(classId)
+    local settings = self:GetTargetFrame()
+    settings.classColors = settings.classColors or {}
+    return settings.classColors[classId] or TARGET_FRAME_DEFAULTS.classColors[classId]
+end
+
+function Settings:SetTargetFrameClassColor(classId, r, g, b)
+    local settings = self:GetTargetFrame()
+    settings.classColors = settings.classColors or {}
+    settings.classColors[classId] = settings.classColors[classId] or {}
+    settings.classColors[classId].r = r
+    settings.classColors[classId].g = g
+    settings.classColors[classId].b = b
+    if Nirnsteel_UI.TargetFrame then
+        Nirnsteel_UI.TargetFrame:RefreshSettings()
+    end
+end
+
+function Settings:SetTargetFramePosition(x, y)
+    local position = self:GetTargetFramePosition()
+    position.x = x
+    position.y = y
+end
+
+function Settings:ResetTargetFramePosition()
+    local position = self:GetTargetFramePosition()
+    position.x = SERVER_PROFILE_DEFAULTS.modules.targetFrame.x
+    position.y = SERVER_PROFILE_DEFAULTS.modules.targetFrame.y
+end
+
+function Settings:ResetActiveTargetFramePosition()
+    if Nirnsteel_UI.TargetFrame and Nirnsteel_UI.TargetFrame.ResetPosition then
+        Nirnsteel_UI.TargetFrame:ResetPosition()
+    else
+        self:ResetTargetFramePosition()
+    end
+end
+
+function Settings:SetTargetFrameSettingsPreviewActive(active)
+    if Nirnsteel_UI.TargetFrame and Nirnsteel_UI.TargetFrame.SetSettingsPreviewActive then
+        Nirnsteel_UI.TargetFrame:SetSettingsPreviewActive(active)
+    end
+end
+
+function Settings:ReplayTargetFramePreviewEffects()
+    if Nirnsteel_UI.TargetFrame and Nirnsteel_UI.TargetFrame.ReplayPreviewEffects then
+        Nirnsteel_UI.TargetFrame:ReplayPreviewEffects()
+    end
+end
+
 function Settings:ReplayGroupFramesPreviewEffects()
     if Nirnsteel_UI.GroupFrames and Nirnsteel_UI.GroupFrames.ReplayPreviewEffects then
         Nirnsteel_UI.GroupFrames:ReplayPreviewEffects()
@@ -1881,6 +2065,44 @@ function Settings:HookGroupFramesSubmenuPreview(panelName)
     CALLBACK_MANAGER:RegisterCallback("LAM-PanelClosed", function(panel)
         if panel and panel:GetName() == panelName then
             self:SetGroupFramesSettingsPreviewActive(false)
+        end
+    end)
+end
+
+function Settings:HookTargetFrameSubmenuPreview(panelName)
+    if self.targetFramePreviewHooked then
+        return
+    end
+
+    self.targetFramePreviewHooked = true
+    CALLBACK_MANAGER:RegisterCallback("LAM-PanelControlsCreated", function(panel)
+        if not panel or panel:GetName() ~= panelName then
+            return
+        end
+
+        local submenu = Nirnsteel_UI_TargetFrameSubmenu
+        if not submenu or submenu.nirnsteelPreviewHooked then
+            return
+        end
+
+        local function UpdatePreview()
+            zo_callLater(function()
+                self:SetTargetFrameSettingsPreviewActive(submenu.open == true)
+            end, 50)
+        end
+
+        if ZO_PostHookHandler then
+            ZO_PostHookHandler(submenu.label, "OnMouseUp", UpdatePreview)
+            ZO_PostHookHandler(submenu.btmToggle, "OnMouseUp", UpdatePreview)
+        end
+
+        submenu.nirnsteelPreviewHooked = true
+        UpdatePreview()
+    end)
+
+    CALLBACK_MANAGER:RegisterCallback("LAM-PanelClosed", function(panel)
+        if panel and panel:GetName() == panelName then
+            self:SetTargetFrameSettingsPreviewActive(false)
         end
     end)
 end
@@ -2133,6 +2355,258 @@ function Settings:BuildGroupFramesOptions()
     return controls
 end
 
+function Settings:BuildTargetFrameOptions()
+    local controls = {}
+    local function Add(control) controls[#controls + 1] = control end
+    local function Disabled() return not self:IsTargetFrameEnabled() end
+    local function Header(name) Add({ type = "header", name = name }) end
+    local function Description(text) Add({ type = "description", text = text }) end
+    local function Checkbox(name, key, tooltip, disabled)
+        Add(
+        {
+            type = "checkbox",
+            name = name,
+            tooltip = tooltip,
+            getFunc = function() return self:GetTargetFrame()[key] end,
+            setFunc = function(value) self:SetTargetFrameValue(key, value) end,
+            disabled = disabled or Disabled,
+            default = TARGET_FRAME_DEFAULTS[key],
+        })
+    end
+    local function Slider(name, key, tooltip, minimum, maximum, step, disabled)
+        Add(
+        {
+            type = "slider",
+            name = name,
+            tooltip = tooltip,
+            min = minimum,
+            max = maximum,
+            step = step,
+            getFunc = function() return self:GetTargetFrame()[key] end,
+            setFunc = function(value) self:SetTargetFrameValue(key, value) end,
+            disabled = disabled or Disabled,
+            default = TARGET_FRAME_DEFAULTS[key],
+        })
+    end
+    local function Dropdown(name, key, tooltip, choices, values, disabled)
+        Add(
+        {
+            type = "dropdown",
+            name = name,
+            tooltip = tooltip,
+            choices = choices,
+            choicesValues = values,
+            getFunc = function() return self:GetTargetFrame()[key] end,
+            setFunc = function(value) self:SetTargetFrameValue(key, value) end,
+            disabled = disabled or Disabled,
+            default = TARGET_FRAME_DEFAULTS[key],
+        })
+    end
+    local function ColorPicker(name, key, tooltip, disabled)
+        Add(
+        {
+            type = "colorpicker",
+            name = name,
+            tooltip = tooltip,
+            getFunc = function()
+                local color = self:GetTargetFrameColor(key)
+                return color.r, color.g, color.b, 1
+            end,
+            setFunc = function(r, g, b) self:SetTargetFrameColor(key, r, g, b) end,
+            disabled = disabled or Disabled,
+            default = function()
+                local color = TARGET_FRAME_DEFAULTS[key]
+                return color.r, color.g, color.b, 1
+            end,
+        })
+    end
+    local function ClassColorPicker(name, classId)
+        Add(
+        {
+            type = "colorpicker",
+            name = name,
+            getFunc = function()
+                local color = self:GetTargetFrameClassColor(classId)
+                return color.r, color.g, color.b, 1
+            end,
+            setFunc = function(r, g, b) self:SetTargetFrameClassColor(classId, r, g, b) end,
+            disabled = function()
+                return Disabled() or self:GetTargetFrame().playerColorMode ~= "class"
+            end,
+            default = function()
+                local color = TARGET_FRAME_DEFAULTS.classColors[classId]
+                return color.r, color.g, color.b, 1
+            end,
+        })
+    end
+
+    Header("General & Position")
+    Add(
+    {
+        type = "checkbox",
+        name = "Enable Target Frame",
+        tooltip = "Replace ESO's reticle target frame with Nirnsteel's compact target frame.",
+        getFunc = function() return self:IsTargetFrameEnabled() end,
+        setFunc = function(value) self:SetTargetFrameEnabled(value) end,
+        default = TARGET_FRAME_DEFAULTS.enabled,
+    })
+    Add(
+    {
+        type = "checkbox",
+        name = "Unlock Position",
+        tooltip = "Show a drag handle. The position is saved for this server.",
+        getFunc = function() return self:IsTargetFrameUnlocked() end,
+        setFunc = function(value) self:SetTargetFrameUnlocked(value) end,
+        disabled = Disabled,
+        default = TARGET_FRAME_DEFAULTS.unlocked,
+    })
+    Add(
+    {
+        type = "button",
+        name = "Reset Position",
+        tooltip = "Move the Target Frame back to its default top-center position.",
+        func = function() self:ResetActiveTargetFramePosition() end,
+        disabled = Disabled,
+        width = "half",
+    })
+    Slider("Scale", "scale", nil, 70, 160, 1)
+    Slider("Bar Width", "width", nil, 180, 700, 5)
+    Slider("Bar Height", "barHeight", nil, 10, 48, 1)
+    Slider("Opacity", "opacity", nil, 10, 100, 1)
+
+    Header("Target Information")
+    Checkbox("Show Class Icon", "showClass", "Show the player's class icon beside their name.")
+    Checkbox("Show Level", "showLevel", "Show level or effective Champion Points beside the name.")
+    Checkbox("Player Level Styling", "showLevelStyle", "Use Group Frames tier colors, gradient, glow, and shimmer.",
+        function() return Disabled() or self:GetTargetFrame().showLevel == false end)
+    Checkbox("Show Veterancy Icon", "showVeterancyIcon",
+        "Show the active Veterancy rank icon for players, or their alliance-colored Alliance War rank when Veterancy is unavailable.")
+    Description("Class and Veterancy icons only appear for player targets. Target markers are always retained.")
+
+    Header("Execute Indicator")
+    Checkbox("Show Execute Icon", "showExecuteIcon", "Show a finisher indicator inside the bar for living, attackable targets at execute health.")
+    Dropdown("Execute Icon", "executeIconStyle", "Choose the symbol used for the execute indicator.",
+        { "Crossed Weapons", "Battlefield", "Group Boss", "Nightblade", "Dragonknight", "Target Marker" },
+        { "crossedWeapons", "battlefield", "groupBoss", "nightblade", "dragonknight", "targetMarker" },
+        function() return Disabled() or self:GetTargetFrame().showExecuteIcon == false end)
+    Slider("Execute Threshold", "executeThreshold", "Show the icon at or below this health percentage.", 18, 33, 1,
+        function() return Disabled() or self:GetTargetFrame().showExecuteIcon == false end)
+    Dropdown("Execute Position", "executePosition", "Left and right reserve room for the adjacent health label.",
+        { "Left", "Center", "Right" }, { "left", "center", "right" },
+        function() return Disabled() or self:GetTargetFrame().showExecuteIcon == false end)
+
+    Header("Target Colors")
+    Dropdown("Non-Player Target Color", "npcColorMode",
+        "Static Red uses your chosen color. Threat / Reaction uses ESO's civilian, allied, neutral, and hostile disposition colors.",
+        { "Static Red", "Threat / Reaction" }, { "static", "reaction" })
+    Dropdown("Player Target Color", "playerColorMode",
+        "Choose a static color, class color, or a health gradient from white to deep red.",
+        { "Static Red", "Class Color", "Health Percentage" }, { "static", "class", "health" })
+    ColorPicker("Static Target Color", "staticColor", nil, function()
+        local settings = self:GetTargetFrame()
+        return Disabled() or (settings.npcColorMode ~= "static" and settings.playerColorMode ~= "static")
+    end)
+    ColorPicker("Full Health Color", "fullHealthColor", nil, function()
+        return Disabled() or self:GetTargetFrame().playerColorMode ~= "health"
+    end)
+    ColorPicker("Low Health Color", "lowHealthColor", nil, function()
+        return Disabled() or self:GetTargetFrame().playerColorMode ~= "health"
+    end)
+    ClassColorPicker("Dragonknight Color", 1)
+    ClassColorPicker("Sorcerer Color", 2)
+    ClassColorPicker("Nightblade Color", 3)
+    ClassColorPicker("Warden Color", 4)
+    ClassColorPicker("Necromancer Color", 5)
+    ClassColorPicker("Templar Color", 6)
+    ClassColorPicker("Arcanist Color", 117)
+    ColorPicker("Unknown Class Color", "unknownClassColor", nil, function()
+        return Disabled() or self:GetTargetFrame().playerColorMode ~= "class"
+    end)
+
+    Header("Bar Appearance")
+    Checkbox("Gloss", "glossEnabled")
+    Checkbox("Fill Pattern", "barPatternEnabled")
+    Dropdown("Fill Pattern Type", "barPatternKey", nil,
+        { "ZigZag", "Smoke", "Still Water", "Stone", "Dirt", "Lava", "Rock Lava", "Lava Wave", "Molten" },
+        { "ZigZag", "smoke", "stillwater", "Stone", "Dirt", "Lava", "RockLava", "LavaWave", "Molten" },
+        function() return Disabled() or self:GetTargetFrame().barPatternEnabled ~= true end)
+    Slider("Fill Pattern Opacity", "barPatternOpacity", nil, 0, 40, 1,
+        function() return Disabled() or self:GetTargetFrame().barPatternEnabled ~= true end)
+    Slider("Fill Pattern Scale", "barPatternScale", nil, 24, 512, 4,
+        function() return Disabled() or self:GetTargetFrame().barPatternEnabled ~= true end)
+    Slider("Black Border Width", "borderWidth", nil, 0, 8, 1)
+    Slider("Corner Rounding", "cornerSize", "Round the frame corners. ESO's fills may still look square.", 0, 12, 1)
+    Slider("Inner Shadow", "innerShadowAlpha", nil, 0, 100, 1)
+    Slider("Outer Shadow", "outerShadowAlpha", nil, 0, 100, 1)
+
+    Header("Text")
+    Dropdown("Font", "textFontKey", nil,
+        { "Game Small", "Game Medium", "Antique", "Trajan", "Univers", "Chat" },
+        { "gameSmall", "gameMedium", "antique", "trajan", "univers", "chat" })
+    Slider("Name Size", "nameTextSize", nil, 10, 36, 1)
+    Slider("Health Text Size", "healthTextSize", nil, 8, 32, 1)
+    Dropdown("Outline", "textOutline", nil,
+        { "None", "Soft Thin", "Soft Thick", "Thick Outline" },
+        { "none", "soft-shadow-thin", "soft-shadow-thick", "thick-outline" })
+    Slider("Text Opacity", "textOpacity", nil, 10, 100, 1)
+    ColorPicker("Text Color", "textColor")
+    Slider("Health Text Inset", "textInset", "Move side labels away from the bar edge.", 0, 28, 1)
+    Slider("Health Text Vertical Offset", "textVerticalOffset", nil, -8, 8, 1)
+    Dropdown("Health Format", "healthTextFormat", nil,
+        { "None", "Number", "Percent", "Number + Percent" },
+        { "none", "number", "percent", "numberAndPercent" })
+    Dropdown("Health Text Position", "healthTextPosition",
+        "Applies to every health format. Opposite Sides places a number on the left and a percent on the right; single values use their natural side.",
+        { "Left", "Center", "Right", "Opposite Sides" }, { "left", "center", "right", "sides" }, Disabled)
+
+    Header("Shields")
+    Checkbox("Shield Overlay", "shieldOverlayEnabled")
+    Slider("Shield Fill Opacity", "shieldFillOpacity", nil, 0, 100, 1,
+        function() return Disabled() or self:GetTargetFrame().shieldOverlayEnabled == false end)
+    ColorPicker("Shield Fill Color", "shieldFillColor", nil,
+        function() return Disabled() or self:GetTargetFrame().shieldOverlayEnabled == false end)
+    Checkbox("Shield Glow", "shieldGlowEnabled", nil,
+        function() return Disabled() or self:GetTargetFrame().shieldOverlayEnabled == false end)
+    Slider("Shield Glow Opacity", "shieldGlowOpacity", nil, 0, 100, 1,
+        function()
+            return Disabled() or self:GetTargetFrame().shieldOverlayEnabled == false
+                or self:GetTargetFrame().shieldGlowEnabled == false
+        end)
+    ColorPicker("Shield Glow Color", "shieldGlowColor", nil,
+        function()
+            return Disabled() or self:GetTargetFrame().shieldOverlayEnabled == false
+                or self:GetTargetFrame().shieldGlowEnabled == false
+        end)
+    Dropdown("Shield Text Mode", "shieldTextMode", nil,
+        { "Off", "Shield Only", "Health + Shield" }, { "off", "shieldOnly", "healthAndShield" })
+
+    Header("Feedback Effects")
+    Checkbox("Bar Feedback", "feedbackEnabled")
+    Slider("Feedback Intensity", "feedbackIntensity", nil, 0, 140, 5,
+        function() return Disabled() or self:GetTargetFrame().feedbackEnabled ~= true end)
+    Checkbox("Damage Pulse", "spendPulseEnabled", nil,
+        function() return Disabled() or self:GetTargetFrame().feedbackEnabled ~= true end)
+    Checkbox("Heal Pulse", "gainPulseEnabled", nil,
+        function() return Disabled() or self:GetTargetFrame().feedbackEnabled ~= true end)
+    Checkbox("Full Health Pulse", "fullResourcePulseEnabled", nil,
+        function() return Disabled() or self:GetTargetFrame().feedbackEnabled ~= true end)
+    Checkbox("Shield Pulse", "shieldPulseEnabled", nil,
+        function() return Disabled() or self:GetTargetFrame().feedbackEnabled ~= true end)
+    Checkbox("Loss Trail", "lossTrailEnabled", "Leave a short-lived highlight behind the bar when health drops.")
+    Checkbox("Low Health Glow", "lowResourceGlowEnabled", "Glow around the target bar below 35% health.",
+        function() return Disabled() or self:GetTargetFrame().feedbackEnabled ~= true end)
+    Add(
+    {
+        type = "button",
+        name = "Replay Preview Effects",
+        func = function() self:ReplayTargetFramePreviewEffects() end,
+        disabled = Disabled,
+        width = "half",
+    })
+
+    return controls
+end
+
 function Settings:RegisterAddonMenu()
     local LAM = LibAddonMenu2
     if not LAM and LibStub then
@@ -2186,6 +2660,17 @@ function Settings:RegisterAddonMenu()
                     setFunc = function(value) self:SetLootHistoryUnlocked(value) end,
                     disabled = function() return not self:IsLootHistoryEnabled() end,
                     default = ACCOUNT_DEFAULTS.modules.lootHistory.unlocked,
+                },
+                {
+                    type = "slider",
+                    name = "Scale",
+                    min = 60,
+                    max = 180,
+                    step = 1,
+                    getFunc = function() return self:GetLootHistory().scale end,
+                    setFunc = function(value) self:SetLootHistoryValue("scale", value) end,
+                    disabled = function() return not self:IsLootHistoryEnabled() end,
+                    default = ACCOUNT_DEFAULTS.modules.lootHistory.scale,
                 },
                 {
                     type = "checkbox",
@@ -3535,6 +4020,13 @@ function Settings:RegisterAddonMenu()
         },
         {
             type = "submenu",
+            name = "Target Frame",
+            tooltip = "Replace ESO's reticle target frame with a compact, customizable Nirnsteel frame.",
+            reference = "Nirnsteel_UI_TargetFrameSubmenu",
+            controls = self:BuildTargetFrameOptions(),
+        },
+        {
+            type = "submenu",
             name = "Resource Bars",
             reference = "Nirnsteel_UI_ResourceBarsSubmenu",
             controls =
@@ -4100,6 +4592,7 @@ function Settings:RegisterAddonMenu()
     self:HookResourceBarsSubmenuPreview(panelName)
     self:HookGroupCalloutsSubmenuPreview(panelName)
     self:HookGroupFramesSubmenuPreview(panelName)
+    self:HookTargetFrameSubmenuPreview(panelName)
 end
 
 local function OnAddOnLoaded(_, addonName)

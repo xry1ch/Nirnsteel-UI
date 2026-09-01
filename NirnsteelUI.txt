@@ -1,4 +1,4 @@
-## Title: NirnSteel UI
+## Title: |c60798DNir|c8196A7nS|cB9C5CDte|c91A8B7el|c6889A1 UI|r
 ## APIVersion: 101050
 ## DependsOn: LibAddonMenu-2.0>=41
 ## SavedVariables: NirnsteelUI_Account NirnsteelUI_Servers NirnsteelUI_Character
@@ -10,6 +10,8 @@ ui/loot_history.xml
 modules/no_mouse_wheel_slider.lua
 modules/settings.lua
 modules/bar_visuals.lua
+modules/level_visuals.lua
+modules/target_frame.lua
 modules/adventure_camera.lua
 modules/experience_tracker.lua
 modules/resource_bars.lua

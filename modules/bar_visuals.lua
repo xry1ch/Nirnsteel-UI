@@ -477,8 +477,11 @@ function BarVisuals:SetValue(frame, current, maximum, smooth, animateLoss)
     frame.nirnsteelCurrent = current
     frame.nirnsteelMaximum = maximum
     frame.bar:SetMinMax(0, maximum)
-    if smooth and ZO_StatusBar_SmoothTransition then
-        ZO_StatusBar_SmoothTransition(frame.bar, current, maximum)
+    if ZO_StatusBar_SmoothTransition then
+        -- The fourth argument forces the value and cancels an in-flight ESO
+        -- smooth transition. A direct SetValue alone can leave that previous
+        -- transition running after a unit/frame swap.
+        ZO_StatusBar_SmoothTransition(frame.bar, current, maximum, not smooth)
     else
         frame.bar:SetValue(current)
     end
