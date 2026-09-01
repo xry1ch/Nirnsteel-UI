@@ -8,6 +8,50 @@ local Nirnsteel_UI = Nirnsteel_UI
 local Settings = {}
 Nirnsteel_UI.Settings = Settings
 
+local MODULE_MENU_ICONS =
+{
+    ["Action Bar"] = "EsoUI/Art/AddOns/Gamepad/gp_mod_listing_category_abilitybar.dds",
+    ["Adventure Camera"] = "EsoUI/Art/Options/Gamepad/gp_options_camera.dds",
+    ["Cast Bar"] = "EsoUI/Art/AddOns/Gamepad/gp_mod_listing_category_castbarsandcooldowns.dds",
+    ["Compass"] = "EsoUI/Art/AddOns/Gamepad/gp_mod_listing_category_mapandcompass.dds",
+    ["Damage Numbers"] = "EsoUI/Art/AddOns/Gamepad/gp_mod_listing_category_combat.dds",
+    ["Experience Tracker"] = "EsoUI/Art/AddOns/Gamepad/gp_mod_listing_category_characterprogression.dds",
+    ["Group Callouts"] = "EsoUI/Art/AddOns/Gamepad/gp_mod_listing_category_chat.dds",
+    ["Group Frames"] = "EsoUI/Art/AddOns/Gamepad/gp_mod_listing_category_unitframes.dds",
+    ["HARDCORE Support"] = "EsoUI/Art/Campaign/campaignbrowser_indexicon_hardcore_up.dds",
+    ["Kill Sound"] = "EsoUI/Art/Options/Gamepad/gp_options_audio.dds",
+    ["Loot History"] = "EsoUI/Art/AddOns/Gamepad/gp_mod_listing_category_bankandinventory.dds",
+    ["Resource Bars"] = "EsoUI/Art/AddOns/Gamepad/gp_mod_listing_category_uigraphics.dds",
+}
+
+local function ConfigureModuleMenuOptions(options)
+    local moduleOptions = {}
+    local otherOptions = {}
+
+    for _, option in ipairs(options) do
+        if option.type == "submenu" then
+            option.icon = MODULE_MENU_ICONS[option.name]
+            moduleOptions[#moduleOptions + 1] = option
+        else
+            otherOptions[#otherOptions + 1] = option
+        end
+    end
+
+    table.sort(moduleOptions, function(left, right)
+        return string.lower(left.name) < string.lower(right.name)
+    end)
+
+    local orderedOptions = { otherOptions[1] }
+    for _, option in ipairs(moduleOptions) do
+        orderedOptions[#orderedOptions + 1] = option
+    end
+    for index = 2, #otherOptions do
+        orderedOptions[#orderedOptions + 1] = otherOptions[index]
+    end
+
+    return orderedOptions
+end
+
 local PROFILE_MIGRATION_VERSION = 1
 local GROUP_CALLOUTS_CHARACTER_MIGRATION_VERSION = 1
 local GROUP_FRAMES_DEFAULTS_MIGRATION_VERSION = 1
@@ -3879,6 +3923,7 @@ function Settings:RegisterAddonMenu()
             default = ACCOUNT_DEFAULTS.debugMode,
         },
     }
+    options = ConfigureModuleMenuOptions(options)
 
     local noMouseWheelSlider = Nirnsteel_UI.NoMouseWheelSlider
     if noMouseWheelSlider and noMouseWheelSlider:Register(LAM) then
