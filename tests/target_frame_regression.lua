@@ -85,6 +85,10 @@ local function NewControl(height)
         self.scale = scale
     end
 
+    function control:SetAlpha(alpha)
+        self.alpha = alpha
+    end
+
     return control
 end
 
@@ -478,6 +482,81 @@ settings.showClass = true
 settings.showLevel = true
 settings.showVeterancyIcon = false
 playerData.marker = TARGET_MARKER_TYPE_NONE
+
+-- Execute icon choices must use the supported texture list, with the requested
+-- death-down texture as the fallback for fresh and obsolete saved values.
+TargetFrame.executeIcon = NewControl(18)
+TargetFrame.health.leftLabel = NewControl(18)
+TargetFrame.health.centerLabel = NewControl(18)
+TargetFrame.health.rightLabel = NewControl(18)
+TargetFrame.health.centerLabel:SetText("18%")
+TargetFrame.health.leftLabel:SetHidden(true)
+TargetFrame.health.rightLabel:SetHidden(true)
+settings.showExecuteIcon = true
+settings.executeThreshold = 18
+settings.executePosition = "center"
+settings.executeIconScale = 100
+
+local executeData =
+{
+    current = 18,
+    maximum = 100,
+    dead = false,
+    attackable = true,
+}
+local executeTextures =
+{
+    whiteSkull = "/esoui/art/compass/target_white_skull.dds",
+    champion = "/esoui/art/tutorial/gamepad/achievement_categoryicon_champion.dds",
+    darkAnchors = "/esoui/art/tutorial/gamepad/achievement_categoryicon_darkanchors.dds",
+    avaGeneral = "/esoui/art/ava/ava_rankicon64_general.dds",
+    avaLegate = "/esoui/art/ava/ava_rankicon64_legate.dds",
+    retrait = "/esoui/art/tutorial/gamepad/gp_inventory_trait_retrait_icon.dds",
+    scoring = "/esoui/art/tutorial/gamepad/gp_overview_menuicon_scoring.dds",
+    deathDown = "/esoui/art/tutorial/tutorial_idexicon_death_down.dds",
+    deathOver = "/esoui/art/tutorial/tutorial_idexicon_death_over.dds",
+}
+for style, texture in pairs(executeTextures) do
+    settings.executeIconStyle = style
+    TargetFrame:UpdateExecute(executeData)
+    expect(TargetFrame.executeIcon.texture == texture,
+        string.format("execute style %s must use its configured texture", style))
+end
+
+settings.executeIconStyle = "obsoleteLegacyStyle"
+TargetFrame:UpdateExecute(executeData)
+expect(TargetFrame.executeIcon.texture == executeTextures.deathDown,
+    "obsolete execute icon values must fall back to Death Down")
+
+settings.executeIconScale = 150
+settings.executePosition = "left"
+TargetFrame.health.leftLabel:SetHidden(false)
+TargetFrame:UpdateExecute(executeData)
+expect(TargetFrame.executeIcon.width == 27 and TargetFrame.executeIcon.height == 27,
+    "execute icon scale must resize both icon dimensions")
+expect(TargetFrame.health.leftLabel.anchor[4] == 36,
+    "side health text must reserve the scaled execute icon width")
+
+settings.executeIconStyle = "deathDown"
+settings.executeIconScale = 100
+settings.executePosition = "center"
+TargetFrame.health.leftLabel:SetHidden(true)
+
+settings.executeBlinkEnabled = true
+TargetFrame:UpdateScheduler()
+expect(layoutRoot.handlers and layoutRoot.handlers.OnUpdate,
+    "enabled execute blinking must register an update handler")
+nowMS = nowMS + 450
+layoutRoot.handlers.OnUpdate()
+expect(TargetFrame.executeIcon.alpha < 0.36 and TargetFrame.executeIcon.scale < 0.93,
+    "execute blinking must fade and shrink the icon at the middle of each pulse")
+
+settings.executeBlinkEnabled = false
+TargetFrame:UpdateScheduler()
+expect(layoutRoot.handlers.OnUpdate == nil,
+    "disabling execute blinking must remove its update handler when no other effect needs it")
+expect(TargetFrame.executeIcon.alpha == 1 and TargetFrame.executeIcon.scale == 1,
+    "disabling execute blinking must restore the icon's visual state")
 
 TargetFrame.eventsRegistered = nil
 TargetFrame:RegisterEvents()

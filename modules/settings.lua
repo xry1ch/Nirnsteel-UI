@@ -342,7 +342,9 @@ local TARGET_FRAME_DEFAULTS =
     showLevelStyle = true,
     showVeterancyIcon = false,
     showExecuteIcon = true,
-    executeIconStyle = "crossedWeapons",
+    executeIconStyle = "deathDown",
+    executeIconScale = 100,
+    executeBlinkEnabled = false,
     executeThreshold = 18,
     executePosition = "center",
     classColors =
@@ -931,6 +933,31 @@ local function UpgradeCastBarDefaults(account)
     end
 end
 
+local function UpgradeTargetFrameExecuteIcon(account)
+    local targetFrame = account
+        and account.modules
+        and account.modules.targetFrame
+    if not targetFrame then
+        return
+    end
+
+    local validStyles =
+    {
+        whiteSkull = true,
+        champion = true,
+        darkAnchors = true,
+        avaGeneral = true,
+        avaLegate = true,
+        retrait = true,
+        scoring = true,
+        deathDown = true,
+        deathOver = true,
+    }
+    if not validStyles[targetFrame.executeIconStyle] then
+        targetFrame.executeIconStyle = TARGET_FRAME_DEFAULTS.executeIconStyle
+    end
+end
+
 function Settings:Initialize()
     self.serverKey = GetServerKey()
 
@@ -943,6 +970,7 @@ function Settings:Initialize()
     UpgradeGroupFramesDefaults(self.account)
     UpgradeSoundChoiceLabels(self.account)
     UpgradeCastBarDefaults(self.account)
+    UpgradeTargetFrameExecuteIcon(self.account)
     self.servers = ZO_SavedVars:NewAccountWide("NirnsteelUI_Servers", SAVED_VARS_VERSION, nil, SERVER_PROFILE_DEFAULTS, self.serverKey)
     MigrateServerSettings(self.servers, self.serverKey)
     self.server = self.servers
@@ -2483,8 +2511,12 @@ function Settings:BuildTargetFrameOptions()
     Header("Execute Indicator")
     Checkbox("Show Execute Icon", "showExecuteIcon", "Show a finisher indicator inside the bar for living, attackable targets at execute health.")
     Dropdown("Execute Icon", "executeIconStyle", "Choose the symbol used for the execute indicator.",
-        { "Crossed Weapons", "Battlefield", "Group Boss", "Nightblade", "Dragonknight", "Target Marker" },
-        { "crossedWeapons", "battlefield", "groupBoss", "nightblade", "dragonknight", "targetMarker" },
+        { "White Skull", "Champion", "Dark Anchors", "Alliance General", "Alliance Legate", "Retrait", "Scoring", "Death Down", "Death Over" },
+        { "whiteSkull", "champion", "darkAnchors", "avaGeneral", "avaLegate", "retrait", "scoring", "deathDown", "deathOver" },
+        function() return Disabled() or self:GetTargetFrame().showExecuteIcon == false end)
+    Slider("Icon Scale", "executeIconScale", "Scale the execute icon independently from the target frame.", 50, 200, 5,
+        function() return Disabled() or self:GetTargetFrame().showExecuteIcon == false end)
+    Checkbox("Blink Animation", "executeBlinkEnabled", "Continuously pulse the execute icon while it is visible.",
         function() return Disabled() or self:GetTargetFrame().showExecuteIcon == false end)
     Slider("Execute Threshold", "executeThreshold", "Show the icon at or below this health percentage.", 18, 33, 1,
         function() return Disabled() or self:GetTargetFrame().showExecuteIcon == false end)
