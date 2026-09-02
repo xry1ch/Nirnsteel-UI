@@ -445,7 +445,7 @@ local ACCOUNT_DEFAULTS =
             scale = 100,
             opacity = 100,
             width = 460,
-            height = 64,
+            height = 56,
             durationMS = 3600,
             intensity = 100,
             visibilityMode = "fade",
@@ -746,6 +746,8 @@ local function UpgradeExperienceTrackerDefaults(account)
 
     if experienceTracker.width == 420 and experienceTracker.height == 48 then
         experienceTracker.width = ACCOUNT_DEFAULTS.modules.experienceTracker.width
+        experienceTracker.height = ACCOUNT_DEFAULTS.modules.experienceTracker.height
+    elseif experienceTracker.width == 460 and experienceTracker.height == 64 then
         experienceTracker.height = ACCOUNT_DEFAULTS.modules.experienceTracker.height
     end
 end
