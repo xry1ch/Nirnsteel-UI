@@ -276,11 +276,20 @@ local function EstimateNameWidth(text)
 end
 
 local function GetIntrinsicNameWidth(label, text)
-    local width = label.GetStringWidth and tonumber(label:GetStringWidth(text or "")) or 0
+    -- ESO can keep the previous target's constrained/ellipsized label width when
+    -- measuring a newly assigned name. Remove that layout constraint first and
+    -- measure the text that is currently applied to the label.
+    if label.SetWrapMode then
+        label:SetWrapMode(TEXT_WRAP_MODE_NONE)
+    end
+    if label.SetWidth then
+        label:SetWidth(0)
+    end
+    local width = label.GetTextWidth and tonumber(label:GetTextWidth()) or 0
     if width <= 0 then
         width = EstimateNameWidth(text)
     end
-    return math.max(math.ceil(width) + 4, 40)
+    return math.max(math.ceil(width) + 12, 40)
 end
 
 local function FormatNumber(value)
@@ -613,12 +622,12 @@ local function GetAllianceIcon(data)
     return nil, nil
 end
 
-local function CreateCenteredLabel(parent)
+local function CreateCenteredLabel(parent, wrapMode)
     local label = WINDOW_MANAGER:CreateControl(nil, parent, CT_LABEL)
     label:SetHorizontalAlignment(TEXT_ALIGN_CENTER)
     label:SetVerticalAlignment(TEXT_ALIGN_CENTER)
     label:SetModifyTextType(MODIFY_TEXT_TYPE_NONE)
-    label:SetWrapMode(TEXT_WRAP_MODE_ELLIPSIS)
+    label:SetWrapMode(wrapMode or TEXT_WRAP_MODE_ELLIPSIS)
     label:SetMaxLineCount(1)
     return label
 end
@@ -637,7 +646,7 @@ function TargetFrame:GetRoot()
 
     self.identity = self.identity or WINDOW_MANAGER:CreateControl(nil, root, CT_CONTROL)
     self.identityContent = self.identityContent or WINDOW_MANAGER:CreateControl(nil, self.identity, CT_CONTROL)
-    self.nameLabel = self.nameLabel or CreateCenteredLabel(self.identityContent)
+    self.nameLabel = self.nameLabel or CreateCenteredLabel(self.identityContent, TEXT_WRAP_MODE_NONE)
     if not self.levelBadge then
         self.levelBadge = LevelVisuals:Create(self.identityContent,
         {

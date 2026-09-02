@@ -28,11 +28,27 @@ local function NewControl(height)
     end
 
     function control:GetTextWidth()
+        if self.useIntrinsicTextMeasurement then
+            local intrinsicWidth = string.len(self.text or "") * 10
+            if self.width > 0 then
+                return math.min(intrinsicWidth, self.width)
+            end
+            return intrinsicWidth
+        end
         return self.width
     end
 
     function control:GetStringWidth(text)
-        return string.len(text or "") * 10
+        local intrinsicWidth = string.len(text or "") * 10
+        if self.useIntrinsicTextMeasurement and self.width > 0 then
+            return math.min(intrinsicWidth, self.width)
+        end
+        return intrinsicWidth
+    end
+
+    function control:SetWidth(width)
+        self.width = width
+        self.setWidthCalls = (self.setWidthCalls or 0) + 1
     end
 
     function control:SetDimensions(width, newHeight)
@@ -66,6 +82,10 @@ local function NewControl(height)
 
     function control:SetHorizontalAlignment(alignment)
         self.horizontalAlignment = alignment
+    end
+
+    function control:SetWrapMode(wrapMode)
+        self.wrapMode = wrapMode
     end
 
     function control:ClearAnchors()
@@ -108,6 +128,8 @@ CENTER = 2
 TOPLEFT = 3
 TOP = 4
 BOTTOMRIGHT = 5
+TEXT_WRAP_MODE_NONE = 0
+TEXT_WRAP_MODE_ELLIPSIS = 1
 zo_strformat = function(_, value)
     return "unexpected-format:" .. tostring(value)
 end
@@ -262,6 +284,8 @@ local TargetFrame = Nirnsteel_UI.TargetFrame
 TargetFrame.identity = NewControl(24)
 TargetFrame.identityContent = NewControl(24)
 TargetFrame.nameLabel = NewControl(24)
+TargetFrame.nameLabel.useIntrinsicTextMeasurement = true
+TargetFrame.nameLabel.wrapMode = TEXT_WRAP_MODE_ELLIPSIS
 TargetFrame.targetMarker = NewControl(18)
 TargetFrame.classIcon = NewControl(20)
 TargetFrame.rankIcon = NewControl(18)
@@ -286,13 +310,17 @@ expect(TargetFrame.classIcon.hidden == false, "player class icon must be visible
 expect(TargetFrame.classIcon.texture == "EsoUI/mock/class_2.dds",
     "player class icon must use ESO's supported platform helper")
 expect(TargetFrame.nameLabel.text == "@WolfswoAccount", "player name must not be rewritten")
-expect(TargetFrame.nameLabel.width == 154,
+expect(TargetFrame.nameLabel.width == 162,
     "player name width must come from intrinsic string measurement, not its previous box")
-expect(TargetFrame.identityContent.width == 249,
+expect(TargetFrame.identityContent.width == 257,
     "class, name, and level must form one compact centered cluster")
 expect(TargetFrame.classIcon.anchor[4] == 0, "the class icon must start the centered identity row")
-expect(TargetFrame.levelBadge.control.anchor[4] == 186,
+expect(TargetFrame.levelBadge.control.anchor[4] == 194,
     "level badge must follow the class and name using the configured compact gaps")
+expect(TargetFrame.nameLabel.wrapMode == TEXT_WRAP_MODE_NONE,
+    "target names must disable ellipsis before intrinsic measurement")
+expect(TargetFrame.nameLabel.setWidthCalls == 1,
+    "target names must clear any width inherited from the previous target before measurement")
 expect(TargetFrame.classIcon.anchor[5] == -2,
     "the class icon must use the shared optical centerline")
 expect(TargetFrame.levelBadge.control.anchor[5] == -1,
@@ -311,9 +339,9 @@ TargetFrame:UpdateIdentity(playerData)
 expect(TargetFrame.rankIcon.hidden == false, "enabled player rank icon must render")
 expect(TargetFrame.rankIcon.texture == "EsoUI/mock/rank_20.dds",
     "player rank rendering must use only the first GetUnitAvARank return value")
-expect(TargetFrame.identityContent.width == 273,
+expect(TargetFrame.identityContent.width == 281,
     "the rank icon must extend the centered cluster by one compact slot")
-expect(TargetFrame.rankIcon.anchor[4] == 255,
+expect(TargetFrame.rankIcon.anchor[4] == 263,
     "the rank icon must follow the level badge with the configured gap")
 
 ZO_GetPlatformTargetMarkerIcon = function(markerType)
@@ -333,7 +361,7 @@ for _, showClass in ipairs(toggleValues) do
                 playerData.marker = showMarker and 3 or TARGET_MARKER_TYPE_NONE
                 TargetFrame:UpdateIdentity(playerData)
 
-                local expectedWidth = 154
+                local expectedWidth = 162
                 if showClass then
                     expectedWidth = expectedWidth + 18 + 6
                 end
@@ -385,6 +413,14 @@ settings.showClass = true
 settings.showLevel = true
 settings.showVeterancyIcon = true
 TargetFrame.health:SetDimensions(settings.width, 25)
+local shortNameData = {}
+for key, value in pairs(playerData) do
+    shortNameData[key] = value
+end
+shortNameData.name = "Mudcrab"
+TargetFrame:UpdateIdentity(shortNameData)
+local previousShortNameWidth = TargetFrame.nameLabel.width
+TargetFrame.nameLabel.wrapMode = TEXT_WRAP_MODE_ELLIPSIS
 local longNameData = {}
 for key, value in pairs(playerData) do
     longNameData[key] = value
@@ -392,11 +428,15 @@ end
 longNameData.name = "@AnExtremelyLongPlayerDisplayName"
 longNameData.marker = 3
 TargetFrame:UpdateIdentity(longNameData)
-local expectedLongNameWidth = string.len(longNameData.name) * 10 + 4
+local expectedLongNameWidth = string.len(longNameData.name) * 10 + 12
 expect(TargetFrame.nameLabel.text == longNameData.name,
     "long player names must remain unchanged")
 expect(TargetFrame.nameLabel.width == expectedLongNameWidth,
-    "long player names must retain their complete intrinsic width")
+    "a long player name must not inherit the previous target's narrow label width")
+expect(TargetFrame.nameLabel.width > previousShortNameWidth,
+    "switching from a short target to a long target must expand the name label")
+expect(TargetFrame.nameLabel.wrapMode == TEXT_WRAP_MODE_NONE,
+    "switching targets must leave the name label in non-ellipsis mode")
 expect(TargetFrame.identityContent.width == expectedLongNameWidth + 119,
     "the decorated identity cluster must expand beyond a narrow bar")
 expect(TargetFrame.identityContent.width > settings.width,
@@ -423,18 +463,18 @@ local npcData =
     alliance = ALLIANCE_NONE,
 }
 TargetFrame:UpdateIdentity(npcData)
-expect(TargetFrame.identityContent.width == 176,
+expect(TargetFrame.identityContent.width == 184,
     "NPC name and level must form their own centered compact cluster")
 expect(TargetFrame.classIcon.hidden == true and TargetFrame.rankIcon.hidden == true,
     "NPC layouts must omit player-only icon slots")
-expect(TargetFrame.levelBadge.control.anchor[4] == 142,
+expect(TargetFrame.levelBadge.control.anchor[4] == 150,
     "the NPC level must sit directly after its name")
 
 -- Multibyte localized names use the same full-width header behavior.
 settings.width = 180
 npcData.name = "Стражник Дома"
 TargetFrame:UpdateIdentity(npcData)
-local expectedLocalizedNameWidth = string.len(npcData.name) * 10 + 4
+local expectedLocalizedNameWidth = string.len(npcData.name) * 10 + 12
 expect(TargetFrame.nameLabel.text == npcData.name,
     "localized NPC names must remain unchanged")
 expect(TargetFrame.nameLabel.width == expectedLocalizedNameWidth,
