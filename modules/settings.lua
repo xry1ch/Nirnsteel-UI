@@ -2476,9 +2476,6 @@ function Settings:BuildTargetFrameOptions()
 
     Header("Target Information")
     Checkbox("Show Class Icon", "showClass", "Show the player's class icon beside their name.")
-    Checkbox("Show Level", "showLevel", "Show level or effective Champion Points beside the name.")
-    Checkbox("Player Level Styling", "showLevelStyle", "Use Group Frames tier colors, gradient, glow, and shimmer.",
-        function() return Disabled() or self:GetTargetFrame().showLevel == false end)
     Checkbox("Show Veterancy Icon", "showVeterancyIcon",
         "Show the active Veterancy rank icon for players, or their alliance-colored Alliance War rank when Veterancy is unavailable.")
     Description("Class and Veterancy icons only appear for player targets. Target markers are always retained.")
@@ -2604,6 +2601,11 @@ function Settings:BuildTargetFrameOptions()
         width = "half",
     })
 
+    Header("Level Text")
+    Checkbox("Show Level", "showLevel", "Show the target's level or effective Champion Points.")
+    Checkbox("Level Style", "showLevelStyle", "Add tier colors and special effects at CP 2000+. Turn it off for plain white level text.",
+        function() return Disabled() or self:GetTargetFrame().showLevel == false end)
+
     return controls
 end
 
@@ -2628,7 +2630,7 @@ function Settings:RegisterAddonMenu()
         name = ADDON_DISPLAY_NAME,
         displayName = ADDON_DISPLAY_NAME,
         author = "Wrynch",
-        version = "1.3.0",
+        version = "2.0.0",
         registerForRefresh = true,
         registerForDefaults = true,
     }

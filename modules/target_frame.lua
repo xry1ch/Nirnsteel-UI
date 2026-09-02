@@ -850,7 +850,6 @@ function TargetFrame:UpdateIdentity(data)
         self.rankIcon:SetColor(iconColor.r, iconColor.g, iconColor.b, 1)
     end
 
-    local frameWidth = Clamp(GetSetting("width"), 180, 700)
     local levelVisible = levelWidth > 0
     local fixedWidth = (classVisible and CLASS_ICON_SIZE or 0)
         + (levelWidth > 0 and levelWidth or 0)
@@ -858,8 +857,7 @@ function TargetFrame:UpdateIdentity(data)
     local gapWidth = (classVisible and CLASS_NAME_GAP or 0)
         + (levelVisible and NAME_LEVEL_GAP or 0)
         + (icon and (levelVisible and LEVEL_RANK_GAP or NAME_LEVEL_GAP) or 0)
-    local availableNameWidth = math.max(frameWidth - fixedWidth - gapWidth, 1)
-    local nameWidth = math.min(GetIntrinsicNameWidth(self.nameLabel, data.name), availableNameWidth)
+    local nameWidth = GetIntrinsicNameWidth(self.nameLabel, data.name)
     local totalWidth = fixedWidth + nameWidth + gapWidth
     self.identityContent:ClearAnchors()
     self.identityContent:SetAnchor(CENTER, self.identity, CENTER, 0, 0)

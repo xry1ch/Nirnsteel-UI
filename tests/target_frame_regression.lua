@@ -374,11 +374,13 @@ for _, showClass in ipairs(toggleValues) do
     end
 end
 
--- At minimum width, fixed slots are preserved and only the name contracts.
+-- At minimum bar width, the complete one-line identity may grow beyond the bar
+-- rather than shortening the target's name.
 settings.width = 180
 settings.showClass = true
 settings.showLevel = true
 settings.showVeterancyIcon = true
+TargetFrame.health:SetDimensions(settings.width, 25)
 local longNameData = {}
 for key, value in pairs(playerData) do
     longNameData[key] = value
@@ -386,14 +388,21 @@ end
 longNameData.name = "@AnExtremelyLongPlayerDisplayName"
 longNameData.marker = 3
 TargetFrame:UpdateIdentity(longNameData)
-expect(TargetFrame.identityContent.width == 180,
-    "an overflowing identity cluster must remain inside the configured frame width")
-expect(TargetFrame.nameLabel.width == 61,
-    "only the player name may shrink when fixed identity slots consume the row")
-expect(TargetFrame.levelBadge.control.anchor[4] == 93,
-    "the level badge must remain inside the minimum-width frame")
-expect(TargetFrame.rankIcon.anchor[4] == 162,
-    "the rank icon must remain aligned with the frame's right edge")
+local expectedLongNameWidth = string.len(longNameData.name) * 10 + 4
+expect(TargetFrame.nameLabel.text == longNameData.name,
+    "long player names must remain unchanged")
+expect(TargetFrame.nameLabel.width == expectedLongNameWidth,
+    "long player names must retain their complete intrinsic width")
+expect(TargetFrame.identityContent.width == expectedLongNameWidth + 119,
+    "the decorated identity cluster must expand beyond a narrow bar")
+expect(TargetFrame.identityContent.width > settings.width,
+    "identity overflow must not resize or constrain the configured bar width")
+expect(TargetFrame.health.width == settings.width,
+    "expanding the identity header must leave the configured health bar width unchanged")
+expect(TargetFrame.levelBadge.control.anchor[4] == expectedLongNameWidth + 32,
+    "the level badge must follow the complete player name")
+expect(TargetFrame.rankIcon.anchor[4] == expectedLongNameWidth + 101,
+    "the rank icon must follow the complete player name and level")
 
 -- NPCs use the same centered row without player-only slots.
 settings.width = 300
@@ -417,8 +426,25 @@ expect(TargetFrame.classIcon.hidden == true and TargetFrame.rankIcon.hidden == t
 expect(TargetFrame.levelBadge.control.anchor[4] == 142,
     "the NPC level must sit directly after its name")
 
+-- Multibyte localized names use the same full-width header behavior.
+settings.width = 180
+npcData.name = "Стражник Дома"
+TargetFrame:UpdateIdentity(npcData)
+local expectedLocalizedNameWidth = string.len(npcData.name) * 10 + 4
+expect(TargetFrame.nameLabel.text == npcData.name,
+    "localized NPC names must remain unchanged")
+expect(TargetFrame.nameLabel.width == expectedLocalizedNameWidth,
+    "localized NPC names must retain their complete intrinsic width")
+expect(TargetFrame.identityContent.width == expectedLocalizedNameWidth + 42,
+    "localized NPC identity clusters must expand beyond a narrow bar")
+expect(TargetFrame.identityContent.width > settings.width,
+    "localized names must not be capped to the configured bar width")
+expect(TargetFrame.levelBadge.control.anchor[4] == expectedLocalizedNameWidth + 8,
+    "the NPC level must follow the complete localized name")
+
 -- The title row was removed. Font extremes must now produce deterministic
 -- geometry from only the identity row, fixed gap, and bar.
+settings.width = 300
 local layoutRoot = NewControl(1)
 local layoutMover = NewControl(1)
 TargetFrame.root = layoutRoot
