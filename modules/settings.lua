@@ -21,6 +21,7 @@ local MODULE_MENU_ICONS =
     ["HARDCORE Support"] = "EsoUI/Art/Campaign/campaignbrowser_indexicon_hardcore_up.dds",
     ["Kill Sound"] = "EsoUI/Art/Options/Gamepad/gp_options_audio.dds",
     ["Loot History"] = "EsoUI/Art/AddOns/Gamepad/gp_mod_listing_category_bankandinventory.dds",
+    ["Misc"] = "EsoUI/Art/AddOns/Gamepad/gp_mod_listing_category_uigraphics.dds",
     ["PvP"] = "EsoUI/Art/AddOns/Gamepad/gp_mod_listing_category_combat.dds",
     ["Resource Bars"] = "EsoUI/Art/AddOns/Gamepad/gp_mod_listing_category_uigraphics.dds",
     ["Target Frame"] = "EsoUI/Art/AddOns/Gamepad/gp_mod_listing_category_unitframes.dds",
@@ -366,6 +367,14 @@ local ACCOUNT_DEFAULTS =
     debugMode = false,
     modules =
     {
+        synergyAlert =
+        {
+            enabled = true,
+            unlocked = false,
+            scale = 100,
+            opacity = 100,
+            animationIntensity = 85,
+        },
         lootHistory =
         {
             enabled = true,
@@ -577,6 +586,12 @@ local SERVER_DEFAULTS =
                 {
                     x = 0,
                     y = -180,
+                },
+                synergyAlert =
+                {
+                    custom = false,
+                    x = 0,
+                    y = 0,
                 },
             },
         },
@@ -1304,6 +1319,42 @@ function Settings:SetKillSoundValue(key, value)
     self:GetKillSound()[key] = value
     if Nirnsteel_UI.KillSound then
         Nirnsteel_UI.KillSound:RefreshSettings()
+    end
+end
+
+function Settings:GetSynergyAlert()
+    return self.account.modules.synergyAlert
+end
+
+function Settings:GetSynergyAlertPosition()
+    return self.server.modules.synergyAlert
+end
+
+function Settings:SetSynergyAlertValue(key, value)
+    local ranges = { scale = { 70, 160 }, opacity = { 20, 100 }, animationIntensity = { 0, 160 } }
+    if ranges[key] then
+        value = ClampNumber(value, ranges[key][1], ranges[key][2])
+    end
+    self:GetSynergyAlert()[key] = value
+    if Nirnsteel_UI.SynergyAlert then
+        Nirnsteel_UI.SynergyAlert:RefreshSettings()
+    end
+end
+
+function Settings:SetSynergyAlertPosition(x, y)
+    local position = self:GetSynergyAlertPosition()
+    position.custom = true
+    position.x = x
+    position.y = y
+end
+
+function Settings:ResetSynergyAlertPosition()
+    local position = self:GetSynergyAlertPosition()
+    position.custom = false
+    position.x = 0
+    position.y = 0
+    if Nirnsteel_UI.SynergyAlert then
+        Nirnsteel_UI.SynergyAlert:ApplyLayout()
     end
 end
 
@@ -2740,6 +2791,83 @@ function Settings:RegisterAddonMenu()
         {
             type = "description",
             text = "Most settings are account wide",
+        },
+        {
+            type = "submenu",
+            name = "Misc",
+            controls =
+            {
+                { type = "header", name = "Synergy Alert" },
+                {
+                    type = "checkbox",
+                    name = "Enable Synergy Alert",
+                    tooltip = "Show a large animated synergy icon, with a centered binding and name row underneath. The original sound and activation binding are preserved.",
+                    getFunc = function() return self:GetSynergyAlert().enabled end,
+                    setFunc = function(value) self:SetSynergyAlertValue("enabled", value) end,
+                    default = ACCOUNT_DEFAULTS.modules.synergyAlert.enabled,
+                },
+                {
+                    type = "checkbox",
+                    name = "Unlock Position",
+                    tooltip = "Drag the sample synergy emblem while settings are open. Its position is saved on this server.",
+                    getFunc = function() return self:GetSynergyAlert().unlocked end,
+                    setFunc = function(value) self:SetSynergyAlertValue("unlocked", value) end,
+                    disabled = function() return not self:GetSynergyAlert().enabled end,
+                    default = ACCOUNT_DEFAULTS.modules.synergyAlert.unlocked,
+                },
+                {
+                    type = "slider",
+                    name = "Scale",
+                    min = 70,
+                    max = 160,
+                    step = 1,
+                    getFunc = function() return self:GetSynergyAlert().scale end,
+                    setFunc = function(value) self:SetSynergyAlertValue("scale", value) end,
+                    disabled = function() return not self:GetSynergyAlert().enabled end,
+                    default = ACCOUNT_DEFAULTS.modules.synergyAlert.scale,
+                },
+                {
+                    type = "slider",
+                    name = "Opacity",
+                    min = 20,
+                    max = 100,
+                    step = 1,
+                    getFunc = function() return self:GetSynergyAlert().opacity end,
+                    setFunc = function(value) self:SetSynergyAlertValue("opacity", value) end,
+                    disabled = function() return not self:GetSynergyAlert().enabled end,
+                    default = ACCOUNT_DEFAULTS.modules.synergyAlert.opacity,
+                },
+                {
+                    type = "slider",
+                    name = "Animation Intensity",
+                    tooltip = "Adjust the soft glow pulse. The icon fades in without resizing or bouncing. Set to zero for a static prompt.",
+                    min = 0,
+                    max = 160,
+                    step = 1,
+                    getFunc = function() return self:GetSynergyAlert().animationIntensity end,
+                    setFunc = function(value) self:SetSynergyAlertValue("animationIntensity", value) end,
+                    disabled = function() return not self:GetSynergyAlert().enabled end,
+                    default = ACCOUNT_DEFAULTS.modules.synergyAlert.animationIntensity,
+                },
+                {
+                    type = "button",
+                    name = "Preview",
+                    tooltip = "Show a silent sample for four seconds, or until locked while positioning.",
+                    func = function()
+                        if Nirnsteel_UI.SynergyAlert then Nirnsteel_UI.SynergyAlert:Preview() end
+                    end,
+                    disabled = function() return not self:GetSynergyAlert().enabled end,
+                    width = "half",
+                },
+                {
+                    type = "button",
+                    name = "Reset Position",
+                    tooltip = "Return the emblem to ESO's default synergy location for the current input mode.",
+                    func = function() self:ResetSynergyAlertPosition() end,
+                    disabled = function() return not self:GetSynergyAlert().enabled end,
+                    width = "half",
+                },
+            },
         },
         {
             type = "submenu",
@@ -4781,6 +4909,14 @@ function Settings:RegisterAddonMenu()
 
     LAM:RegisterAddonPanel(panelName, panelData)
     LAM:RegisterOptionControls(panelName, options)
+    for _, eventName in ipairs({ "LAM-PanelOpened", "LAM-PanelClosed" }) do
+        local visible = eventName == "LAM-PanelOpened"
+        CALLBACK_MANAGER:RegisterCallback(eventName, function(panel)
+            if panel and panel:GetName() == panelName and Nirnsteel_UI.SynergyAlert then
+                Nirnsteel_UI.SynergyAlert:SetSettingsPanelVisible(visible)
+            end
+        end)
+    end
     self:HookResourceBarsSubmenuPreview(panelName)
     self:HookGroupCalloutsSubmenuPreview(panelName)
     self:HookGroupFramesSubmenuPreview(panelName)
