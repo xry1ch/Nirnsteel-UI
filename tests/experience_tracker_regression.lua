@@ -180,6 +180,8 @@ expect(root:GetWidth() == 460 and root:GetHeight() == 56, "the redesigned tracke
 expect(root.topRail and root.bottomRail and root.divider, "the ornate native-asset frame must create rails and a divider")
 expect(root.typeLabel.anchor[5] == root.gainLabel.anchor[5], "gain feedback must share the left header row")
 expect(root.icon.hidden == false and root.rankHasIcon == true, "Champion mode must show its discipline icon by default")
+expect(root.badge.edgeColor[3] >= root.badge.edgeColor[1] and root.panel.edgeColor[3] >= root.panel.edgeColor[1],
+    "the frame and rank plaque must use cool steel instead of yellow trim")
 
 trackerSettings.showChampionIcon = false
 ExperienceTracker:SetVisualMode("cp", 2047)
@@ -189,16 +191,21 @@ trackerSettings.showChampionIcon = true
 
 trackerSettings.showProgressText = false
 ExperienceTracker:SetBarValue(250, 1000)
-expect(root.progressLabel.hidden == true, "disabling progress text must hide only the right header")
+expect(root.progressLabel.hidden and root.percentLabel.hidden, "disabling progress text must hide totals and percentage")
 trackerSettings.showProgressText = true
 ExperienceTracker:SetBarValue(250, 1000)
-expect(root.progressLabel.text == "250 / 1000 - 25%", "progress text must retain current, maximum, and percentage")
+expect(root.progressLabel.text == "250 / 1000" and root.percentLabel.text == "25%",
+    "progress must separate the totals and percentage")
 
 trackerSettings.width = 360
 ExperienceTracker:ApplyLayout()
 ExperienceTracker:SetBarValue(250000, 1000000)
-expect(root.progressLabel.text == "250K / 1M - 25%",
+expect(root.progressLabel.text == "250K / 1M" and root.percentLabel.text == "25%",
     "minimum-width layouts must compact large values without dropping the percentage")
+expect(root.progressLabel.anchor[5] > root.track.anchor[5] + root.track.height,
+    "XP totals must sit below the track without competing with the gain header")
+expect(root.gainLabel.width + root.percentLabel.width < root.track.width,
+    "the gain header and percentage must have separate space even at minimum width")
 trackerSettings.width = 460
 ExperienceTracker:ApplyLayout()
 
@@ -226,15 +233,25 @@ expect(root.gainLabel.alpha > 0.9 and root.typeLabel.alpha < 0.1,
     "gain text must replace the mode label while XP is moving")
 expect(root.bulk.value > 0 and root.bulk.value <= 150, "the gain overlay value must be relative to the earned interval")
 expect(#playedSounds > 0 and playedSounds[1] == "chunk", "chunk boundaries must retain the configured sound")
+expect(root.bar.height > root.track.height and root.tickFlash.alpha > 0.5,
+    "gain ticks must visibly expand and brighten the filled bar")
+expect(root.tickFlash.value == root.bar.value and root.tickFlash.maximum == regular.maxValue,
+    "tick flashes must follow the real filled amount")
 
 nowMS = regularAnimation.startMS + regularAnimation.durationMS
 ExperienceTracker:OnUpdate()
 expect(ExperienceTracker.animation.type == "hold", "a completed gain must enter its hold state")
 local holdAnimation = ExperienceTracker.animation
-nowMS = holdAnimation.startMS + math.floor(holdAnimation.durationMS * 0.14)
+nowMS = holdAnimation.startMS + 510
 ExperienceTracker:OnUpdate()
-expect(root.typeLabel.alpha > 0 and root.gainLabel.alpha > 0,
-    "the hold state must crossfade the gain header back to the mode label")
+expect(root.typeLabel.alpha == 0 and root.gainLabel.alpha > 0,
+    "the gain header must fade away before the mode text appears")
+nowMS = holdAnimation.startMS + 650
+ExperienceTracker:OnUpdate()
+expect(root.typeLabel.alpha > 0 and root.gainLabel.alpha == 0,
+    "the restored mode label must not overlap the reward text")
+expect(root.bar.height == root.track.height and root.tickFlash.hidden,
+    "the final tick must finish settling while the gain is held")
 
 ExperienceTracker:HideRoot()
 trackerSettings.showGainText = false
@@ -264,12 +281,29 @@ ExperienceTracker:BeginLevelUpBurst(wrapped)
 local levelAnimation = ExperienceTracker.animation
 expect(root.levelLabel.text == "10" and root.nextLevelLabel.text == "11" and not root.nextLevelLabel.hidden,
     "level-up preparation must create outgoing and incoming rank values")
-expect(playedSounds[#playedSounds] == "level", "the redesigned level-up must retain its configured sound")
+expect(#playedSounds == 0, "the level-up charge must reserve its sound for the rank reveal")
+
+nowMS = levelAnimation.startMS + math.floor(levelAnimation.durationMS * 0.10)
+ExperienceTracker:OnUpdate()
+expect(root.levelLabel.text == "10" and root.nextLevelLabel.alpha == 0 and root.tickFlash.alpha > 0,
+    "the full bar must charge before revealing the next rank")
+local chargeSweepX = root.rewardShine.anchor[4]
+nowMS = levelAnimation.startMS + math.floor(levelAnimation.durationMS * 0.20)
+ExperienceTracker:OnUpdate()
+expect(root.rewardShine.anchor[4] < chargeSweepX and #playedSounds == 0,
+    "the charge must travel toward the rank plaque before its impact sound")
 
 nowMS = levelAnimation.startMS + math.floor(levelAnimation.durationMS * 0.26)
 ExperienceTracker:OnUpdate()
 expect(root.nextLevelLabel.alpha > 0 and root.levelLabel.alpha < 1,
-    "the new rank must rise in while the old rank fades out")
+    "the new rank must land after the charge")
+expect(playedSounds[#playedSounds] == "level", "the level-up sound must coincide with the incoming rank")
+expect(root.gainLabel.text == "LEVEL UP" and root.nextLevelLabel.scale > 1,
+    "the impact must announce the milestone and give the new rank a visible landing")
+expect(root.levelBurst.height == 2 and root.badgeBurst.height == 2 and root.badge.scale == 1,
+    "the level-up release must use light streaks while keeping the plaque still")
+ExperienceTracker:OnUpdate()
+expect(#playedSounds == 1, "repeated frames must not replay the level-up impact sound")
 
 nowMS = levelAnimation.startMS + levelAnimation.durationMS
 ExperienceTracker:OnUpdate()
@@ -290,12 +324,14 @@ ExperienceTracker:BeginLevelUpBurst({
     mode = "xp", level = 20, startValue = 900, stopValue = 1000, maxValue = 1000, wraps = true,
 })
 local zeroAnimation = ExperienceTracker.animation
-nowMS = zeroAnimation.startMS + math.floor(zeroAnimation.durationMS * 0.20)
+nowMS = zeroAnimation.startMS + math.floor(zeroAnimation.durationMS * 0.30)
 ExperienceTracker:OnUpdate()
 expect(root.levelLabel.text == "21" and root.nextLevelLabel.hidden,
     "zero intensity must still commit the new rank without decorative motion")
 expect(root.impactFlash.alpha == 0 and root.levelBurst.alpha == 0,
     "zero intensity must suppress flash and burst layers")
+expect(root.tickFlash.alpha == 0 and root.bar.height == root.track.height,
+    "zero intensity must suppress the level-up bar deformation")
 expect(playedSounds[#playedSounds] == "level", "zero visual intensity must not suppress the level-up sound")
 
 -- Disabling the special animation still advances directly into the next level.
@@ -337,6 +373,83 @@ expect(root.nextLevelLabel.hidden and root.levelBurst.hidden and root.badgeBurst
     "rapid gains must clear stale rank and burst layers")
 expect(root.badge.scale == 1 and ExperienceTracker.rankReveal == nil,
     "rapid gains must restore the plaque transform and rank state")
+expect(root.tickFlash.hidden and root.bar.height == root.track.height,
+    "interrupting a level-up must also clear its filled-bar charge")
+
+-- Sample the complete fill, including every former chunk boundary. XP must
+-- never move backwards, and highlights must stay inside the painted interval.
+ExperienceTracker:HideRoot()
+nowMS = 14000
+ExperienceTracker:QueueSegments({ regular }, 150, "xp")
+local smoothAnimation = ExperienceTracker.animation
+local previousValue = regular.startValue
+for elapsed = 0, smoothAnimation.durationMS - 1, 7 do
+    nowMS = smoothAnimation.startMS + elapsed
+    ExperienceTracker:OnUpdate()
+    expect(root.bar.value >= previousValue and root.bar.value <= regular.stopValue,
+        "continuous gains must be monotonic and cannot overshoot")
+    local filledWidth = root.track.width * root.bar.value / regular.maxValue
+    expect(root.shine.anchor[4] >= 0 and root.shine.anchor[4] + root.shine.width <= filledWidth + 0.001,
+        "the moving sheen must stay inside the actual filled region")
+    expect(root.fillEdge.anchor[4] >= 0 and root.fillEdge.anchor[4] + root.fillEdge.width <= root.track.width,
+        "the leading edge must stay inside the track")
+    previousValue = root.bar.value
+end
+
+-- Same-rank gains retarget the painted value and preserve opacity; incoming
+-- event data must not be mutated when the animation's start point changes.
+local visibleValue, visibleAlpha = root.bar.value, root.alpha
+local nextGain = { mode = "xp", level = 10, startValue = 250, stopValue = 400, maxValue = 1000, wraps = false }
+ExperienceTracker:QueueSegments({ nextGain }, 150, "xp")
+expect(near(root.bar.value, visibleValue) and nextGain.startValue == 250,
+    "rapid gains must start at the visible fill without mutating the event")
+expect(ExperienceTracker.totalGainAmount == 300, "rapid gains must combine the visible reward amount")
+ExperienceTracker:OnUpdate()
+expect(near(root.alpha, visibleAlpha), "retargeting a visible tracker must not restart its fade-in")
+
+-- Low frame rates may cross several markers, but emit only one sound per frame.
+playedSounds = {}
+local retargetAnimation = ExperienceTracker.animation
+nowMS = retargetAnimation.startMS + retargetAnimation.durationMS
+ExperienceTracker:OnUpdate()
+expect(#playedSounds == 1, "a delayed frame must not stack multiple chunk sounds")
+expect(root.bar.value == 400, "retargeted gains must finish at the newest XP value")
+
+ExperienceTracker:HideRoot()
+trackerSettings.intensity = 0
+nowMS = 18000
+ExperienceTracker:QueueSegments({ regular }, 150, "xp")
+local quietAnimation = ExperienceTracker.animation
+nowMS = quietAnimation.startMS + math.floor(quietAnimation.durationMS * 0.5)
+ExperienceTracker:OnUpdate()
+for _, pulse in ipairs(root.chunkPulses) do
+    expect(pulse.hidden and pulse.alpha == 0, "zero intensity must suppress regular XP sparks")
+end
+expect(root.shine.alpha == 0 and root.glow.alpha == 0 and root.impactFlash.alpha == 0,
+    "zero intensity must suppress decorative gain effects")
+trackerSettings.intensity = 100
+
+ExperienceTracker:SetBarValue(999.5, 1000)
+expect(root.percentLabel.text == "99%", "the percentage must not announce completion early")
+ExperienceTracker:SetBarValue(0, 1000)
+expect(root.fillEdge.hidden, "an empty XP bar must not leave a bright marker behind")
+
+-- A standalone CP notification settles to current progress, never a stale 100%.
+ExperienceTracker:HideRoot()
+playedSounds = {}
+nowMS = 20000
+ExperienceTracker:PreviewCPFlash(2050, 2)
+local standaloneAnimation = ExperienceTracker.animation
+nowMS = standaloneAnimation.startMS + standaloneAnimation.durationMS
+ExperienceTracker:OnUpdate()
+expect(#playedSounds == 1 and playedSounds[1] == "level",
+    "a skipped charge/reveal must still play its impact exactly once")
+expect(root.levelLabel.text == "2050" and root.bar.value == GetPlayerChampionXP(),
+    "standalone CP celebrations must settle on the new rank and current CP progress")
+expect(root.gainLabel.text == "CHAMPION +2" and ExperienceTracker.animation.type == "hold",
+    "multi-point milestones must remain readable after their reveal")
+expect(root.tickFlash.hidden and root.bar.height == root.track.height and root.levelBurst.hidden,
+    "a completed celebration must reset all bar transforms and light streaks")
 
 -- Execute the settings migration body directly so customized dimensions remain protected.
 -- Fengari omits io.open; the add-on's Lua 5.1 regression runtime executes this block.
