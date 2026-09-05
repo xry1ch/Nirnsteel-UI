@@ -21,6 +21,7 @@ local MODULE_MENU_ICONS =
     ["HARDCORE Support"] = "EsoUI/Art/Campaign/campaignbrowser_indexicon_hardcore_up.dds",
     ["Kill Sound"] = "EsoUI/Art/Options/Gamepad/gp_options_audio.dds",
     ["Loot History"] = "EsoUI/Art/AddOns/Gamepad/gp_mod_listing_category_bankandinventory.dds",
+    ["PvP"] = "EsoUI/Art/AddOns/Gamepad/gp_mod_listing_category_combat.dds",
     ["Resource Bars"] = "EsoUI/Art/AddOns/Gamepad/gp_mod_listing_category_uigraphics.dds",
     ["Target Frame"] = "EsoUI/Art/AddOns/Gamepad/gp_mod_listing_category_unitframes.dds",
 }
@@ -407,6 +408,16 @@ local ACCOUNT_DEFAULTS =
             enabled = true,
             soundKey = "CODE_REDEMPTION_SUCCESS",
         },
+        pvp =
+        {
+            enabled = true,
+            unlocked = false,
+            scale = 100,
+            intensity = 100,
+            soundEnabled = true,
+            chainEnabled = true,
+            includeDuels = true,
+        },
         actionBarFrames =
         {
             enabled = true,
@@ -536,6 +547,11 @@ local SERVER_DEFAULTS =
                         x = 470,
                         y = 250,
                     },
+                },
+                pvp =
+                {
+                    x = 0,
+                    y = 140,
                 },
                 experienceTracker =
                 {
@@ -1014,6 +1030,14 @@ function Settings:GetKillSound()
     return self.account.modules.killSound
 end
 
+function Settings:GetPvP()
+    return self.account.modules.pvp
+end
+
+function Settings:GetPvPPosition()
+    return self.server.modules.pvp
+end
+
 function Settings:GetGroupCallouts()
     return self.character.modules.groupCallouts
 end
@@ -1090,6 +1114,7 @@ function Settings:SetDebugModeEnabled(value)
     {
         Nirnsteel_UI.LootHistory,
         Nirnsteel_UI.DamageNumbers,
+        Nirnsteel_UI.PvP,
         Nirnsteel_UI.ExperienceTracker,
         Nirnsteel_UI.ResourceBars,
         Nirnsteel_UI.GroupFrames,
@@ -1282,6 +1307,41 @@ function Settings:SetKillSoundValue(key, value)
     end
 end
 
+function Settings:IsPvPEnabled()
+    return self:GetPvP().enabled
+end
+
+function Settings:IsPvPUnlocked()
+    return self:GetPvP().unlocked
+end
+
+function Settings:SetPvPEnabled(value)
+    self:GetPvP().enabled = value == true
+    if Nirnsteel_UI.PvP then
+        Nirnsteel_UI.PvP:RefreshSettings()
+    end
+end
+
+function Settings:SetPvPUnlocked(value)
+    self:GetPvP().unlocked = value == true
+    if Nirnsteel_UI.PvP then
+        Nirnsteel_UI.PvP:RefreshSettings()
+    end
+end
+
+function Settings:SetPvPValue(key, value)
+    self:GetPvP()[key] = value
+    if Nirnsteel_UI.PvP then
+        Nirnsteel_UI.PvP:RefreshSettings()
+    end
+end
+
+function Settings:SetPvPPosition(x, y)
+    local position = self:GetPvPPosition()
+    position.x = x
+    position.y = y
+end
+
 function Settings:IsGroupCalloutsEnabled()
     return self:GetGroupCallouts().enabled
 end
@@ -1444,6 +1504,12 @@ end
 function Settings:PreviewKillSound()
     if Nirnsteel_UI.KillSound and Nirnsteel_UI.KillSound.PreviewSound then
         Nirnsteel_UI.KillSound:PreviewSound()
+    end
+end
+
+function Settings:PreviewPvPChain()
+    if Nirnsteel_UI.PvP and Nirnsteel_UI.PvP.PreviewChain then
+        Nirnsteel_UI.PvP:PreviewChain()
     end
 end
 
@@ -2664,7 +2730,7 @@ function Settings:RegisterAddonMenu()
         name = ADDON_DISPLAY_NAME,
         displayName = ADDON_DISPLAY_NAME,
         author = "Wrynch",
-        version = "2.0.0",
+        version = "2.1.0",
         registerForRefresh = true,
         registerForDefaults = true,
     }
@@ -3078,6 +3144,96 @@ function Settings:RegisterAddonMenu()
                     end,
                     disabled = function() return not self:IsKillSoundEnabled() end,
                     default = GetSoundChoiceLabel(ACCOUNT_DEFAULTS.modules.killSound.soundKey),
+                },
+            },
+        },
+        {
+            type = "submenu",
+            name = "PvP",
+            tooltip = "Customize your PvP experience.",
+            controls =
+            {
+                {
+                    type = "description",
+                    text = "Customize your PvP experience.",
+                },
+                {
+                    type = "header",
+                    name = "Kill Streak Animation",
+                },
+                {
+                    type = "checkbox",
+                    name = "Enable Kill Streak Animation",
+                    tooltip = "Celebrate PvP kills and kill streaks.",
+                    getFunc = function() return self:IsPvPEnabled() end,
+                    setFunc = function(value) self:SetPvPEnabled(value) end,
+                    default = ACCOUNT_DEFAULTS.modules.pvp.enabled,
+                },
+                {
+                    type = "checkbox",
+                    name = "Unlock Animation",
+                    tooltip = "Show a drag handle for the PvP medallion. Its position is saved on this server.",
+                    getFunc = function() return self:IsPvPUnlocked() end,
+                    setFunc = function(value) self:SetPvPUnlocked(value) end,
+                    disabled = function() return not self:IsPvPEnabled() end,
+                    default = ACCOUNT_DEFAULTS.modules.pvp.unlocked,
+                },
+                {
+                    type = "checkbox",
+                    name = "Enable Sounds",
+                    tooltip = "Play progressively stronger sounds as the kill chain grows.",
+                    getFunc = function() return self:GetPvP().soundEnabled end,
+                    setFunc = function(value) self:SetPvPValue("soundEnabled", value) end,
+                    disabled = function() return not self:IsPvPEnabled() end,
+                    default = ACCOUNT_DEFAULTS.modules.pvp.soundEnabled,
+                },
+                {
+                    type = "checkbox",
+                    name = "Enable Kill Chains",
+                    tooltip = "Combine rapid killing blows into a single escalating counter.",
+                    getFunc = function() return self:GetPvP().chainEnabled end,
+                    setFunc = function(value) self:SetPvPValue("chainEnabled", value) end,
+                    disabled = function() return not self:IsPvPEnabled() end,
+                    default = ACCOUNT_DEFAULTS.modules.pvp.chainEnabled,
+                },
+                {
+                    type = "checkbox",
+                    name = "Include Duels",
+                    tooltip = "Celebrate duels that you win. Forfeits do not count as kills.",
+                    getFunc = function() return self:GetPvP().includeDuels end,
+                    setFunc = function(value) self:SetPvPValue("includeDuels", value) end,
+                    disabled = function() return not self:IsPvPEnabled() end,
+                    default = ACCOUNT_DEFAULTS.modules.pvp.includeDuels,
+                },
+                {
+                    type = "slider",
+                    name = "Scale",
+                    min = 60,
+                    max = 180,
+                    step = 1,
+                    getFunc = function() return self:GetPvP().scale end,
+                    setFunc = function(value) self:SetPvPValue("scale", value) end,
+                    disabled = function() return not self:IsPvPEnabled() end,
+                    default = ACCOUNT_DEFAULTS.modules.pvp.scale,
+                },
+                {
+                    type = "slider",
+                    name = "Animation Intensity",
+                    tooltip = "Control flashes, impact shake, sparks, and the maximum-chain shockwave.",
+                    min = 0,
+                    max = 150,
+                    step = 5,
+                    getFunc = function() return self:GetPvP().intensity end,
+                    setFunc = function(value) self:SetPvPValue("intensity", value) end,
+                    disabled = function() return not self:IsPvPEnabled() end,
+                    default = ACCOUNT_DEFAULTS.modules.pvp.intensity,
+                },
+                {
+                    type = "button",
+                    name = "Preview Kill Chain",
+                    tooltip = "Preview the x1, x4, and x8 medallions, kill-card fans, and sounds.",
+                    func = function() self:PreviewPvPChain() end,
+                    disabled = function() return not self:IsPvPEnabled() end,
                 },
             },
         },
