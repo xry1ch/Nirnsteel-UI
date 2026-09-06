@@ -3997,8 +3997,8 @@ function Settings:RegisterAddonMenu()
                 },
                 {
                     type = "checkbox",
-                    name = "Show Tick Flashes",
-                    tooltip = "Show small white flashes as the cast moves along.",
+                    name = "Show Progress Marks",
+                    tooltip = "Show progress divisions that pulse as the cast passes them.",
                     getFunc = function() return self:GetCastBar().showTicks end,
                     setFunc = function(value) self:SetCastBarValue("showTicks", value) end,
                     disabled = function() return not self:IsCastBarEnabled() end,
@@ -4061,7 +4061,7 @@ function Settings:RegisterAddonMenu()
                 {
                     type = "slider",
                     name = "Animation Intensity",
-                    tooltip = "Set the strength of the glow and flash effects.",
+                    tooltip = "Set the strength of cast pulses, moving highlights, and the completion flash and expanding glow. Zero disables decorative animation.",
                     min = 0,
                     max = 160,
                     step = 5,
