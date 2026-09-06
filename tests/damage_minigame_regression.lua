@@ -80,6 +80,7 @@ end
 
 TOP, BOTTOM, LEFT, RIGHT, CENTER, TOPLEFT = 'TOP', 'BOTTOM', 'LEFT', 'RIGHT', 'CENTER', 'TOPLEFT'
 CT_CONTROL, CT_BACKDROP, CT_TEXTURE, CT_LABEL = 1, 2, 3, 4
+CT_POLYGON, POLYGON_POINT_LAYOUT_CLOCKWISE, POLYGON_BORDER_DIRECTION_IN = 5, 1, 1
 DT_HIGH, DL_BACKGROUND, DL_CONTROLS, DL_OVERLAY = 1, 1, 2, 3
 TEX_BLEND_MODE_ADD, TEXT_ALIGN_CENTER, MOUSE_BUTTON_INDEX_LEFT = 1, 1, 1
 EVENT_ADD_ON_LOADED, EVENT_PLAYER_DEACTIVATED, EVENT_COMBAT_EVENT = 1, 2, 3
@@ -173,7 +174,7 @@ Reset()
 Damage:AddDamageDone(100000, true)
 Advance(2750)
 expect(Damage.minigameScore == 0 and root.mainLabel.text == '100,000', 'the result must show peak damage instead of a zero flash')
-expect(root.caption.text == 'PEAK DAMAGE DONE  /  1 HIT' and root.timer.width == 310, 'result must clearly identify the peak and settle its underline')
+expect(root.caption.text == 'PEAK DAMAGE DONE  /  1 HIT' and root.timer.remainingFraction == 1, 'result must clearly identify the peak and fill its wings')
 Advance(900)
 expect(root.hidden and root.handlers.OnUpdate == nil, 'finished streaks must release their update handler')
 
@@ -211,9 +212,9 @@ end
 Reset()
 Damage:AddDamageDone(1000, false)
 Advance(1249)
-local beforeDrain = root.timer.width
+local beforeDrain = root.timer.remainingFraction
 Advance(2)
-expect(root.timer.width < beforeDrain and beforeDrain - root.timer.width < 1, 'timer must not refill when grace ends')
+expect(root.timer.remainingFraction < beforeDrain and beforeDrain - root.timer.remainingFraction < 0.001, 'timer must not refill when grace ends')
 settings.faceRight = true
 Damage:ApplyMinigameLayout()
 expect(root.visual.rotation > 0 and root.visual.skew > 0, 'right-facing layout must mirror tilt and skew')
@@ -236,7 +237,7 @@ expect(root.echoRed.alpha == 0 and root.impactFlash.alpha == 0 and root.shockwav
 for _, spark in ipairs(root.sparks) do expect(spark.hidden, 'zero motion must hide sparks') end
 settings.showModeLabel, settings.showHitCount = false, false
 Advance(16)
-expect(root.caption.hidden and root.timer.width < 310, 'hiding the caption must preserve the live timer')
+expect(root.caption.hidden and root.timer.remainingFraction < 1, 'hiding the caption must preserve the live timer')
 settings.showHitCount = true
 Advance(16)
 expect(root.caption.text == '3 HITS', 'hit count alone must have no mode label or separator')
@@ -245,7 +246,7 @@ Advance(16)
 expect(root.caption.text == 'DAMAGE DONE', 'mode label must work without hit count')
 settings.showTimer = false
 Advance(16)
-expect(not root.caption.hidden and root.timer.width == 310, 'timer toggle must not hide the caption')
+expect(not root.caption.hidden and root.timer.remainingFraction == 1, 'timer toggle must not hide the caption')
 settings.showModeLabel = false
 Advance(2750)
 expect(root.caption.text == 'PEAK' and not root.caption.hidden, 'peak label must work with mode and hit count hidden')
@@ -253,6 +254,91 @@ settings.showPeakLabel = false
 Advance(16)
 expect(root.caption.hidden and root.mainLabel.text == '102,100', 'hiding the peak label must keep the final score')
 settings.showTimer, settings.showModeLabel, settings.showHitCount, settings.showPeakLabel = true, true, true, true
+
+-- Metalwork has bounded geometry; both wings drain symmetrically from the tips.
+Reset()
+Damage:AddDamageDone(100000, true)
+expect(#root.timer.wings == 2 and #root.timer.crest.ranks == 6, 'crest geometry must remain pooled and bounded')
+Advance(1375)
+for _, wing in ipairs(root.timer.wings) do
+    expect(#wing.plates == 4, 'each wing must have four plates')
+    expect(wing.plates[1].fill.alpha > 0 and wing.plates[4].fill.alpha == 0, 'outer plates must empty before inner plates')
+    expect(wing.rotation == 0 and wing.transformOffset[1] == 0, 'wings must settle after the impact')
+end
+expect(near(root.visual.transformScale, 1) and near(root.timer.crest.transformScale, 1), 'stamp must settle to its exact resting size')
+expect(root.timer.crest.ranks[1].centerColor[4] == 0.95 and root.timer.crest.ranks[2].centerColor[4] == 0.16, 'inlays must reflect earned milestones')
+settings.animationIntensity = 0
+Damage:AddDamageDone(100000, true)
+Advance(16)
+expect(root.timer.crest.transformScale == 1 and root.timer.crest.strike.alpha == 0, 'zero motion must also disable crest stamps and glints')
+for _, wing in ipairs(root.timer.wings) do
+    expect(wing.rotation == 0 and wing.transformOffset[1] == 0, 'zero motion must disable wing recoil')
+end
+
+-- Independent threshold boundaries and cap-only geometry.
+local thresholdsByMode = {
+    damageDone = {100000, 250000, 500000, 1000000, 2500000, 5000000},
+    dps = {20000, 40000, 60000, 80000, 110000, 140000},
+}
+for mode, thresholds in pairs(thresholdsByMode) do
+    for index, threshold in ipairs(thresholds) do
+        for _, offset in ipairs({-1, 0, 1}) do
+            Reset(mode)
+            Damage:AddDamageDone(threshold + offset, true)
+            expect(Damage.minigameHighestTier == (offset < 0 and index - 1 or index),
+                mode .. ' must change tiers exactly at ' .. threshold)
+        end
+    end
+    Reset(mode)
+    Damage:AddDamageDone(thresholds[6] * 10, true)
+    expect(Damage.minigameHighestTier == 6, 'progression must cap at tier six')
+    Advance(160)
+    expect(not root.maxShockwave.hidden and root.maxShockwave.alpha > 0, 'top tier must emit a second shockwave')
+    for _, wing in ipairs(root.timer.wings) do
+        for _, armor in ipairs(wing.armor) do expect(not armor.hidden, 'top tier must unfold all armor layers') end
+    end
+    for _, rune in ipairs(root.timer.runes) do expect(not rune.hidden, 'top tier must show six orbiting runes') end
+    expect(not root.timer.crest.crown[1].hidden and not root.timer.crest.aura.hidden, 'top tier must show its crown and aura')
+    local runeX = root.timer.runes[1].transformOffset[1]
+    Advance(80)
+    expect(root.timer.runes[1].transformOffset[1] ~= runeX, 'top runes must animate independently of the score stamp')
+    settings.animationIntensity = 0
+    Advance(16)
+    local stillX = root.timer.runes[1].transformOffset[1]
+    Advance(16)
+    expect(near(root.timer.crest.transformScale, 1.3) and root.timer.runes[1].transformOffset[1] == stillX,
+        'zero intensity must preserve the larger cap design without animation')
+    expect(root.timer.crest.strike.alpha == 0 and root.impactFlash.alpha == 0 and root.maxShockwave.hidden,
+        'zero intensity must suppress additional cap flashes and waves')
+    Reset(mode)
+    Damage:AddDamageDone(1000, false)
+    expect(root.timer.crest.aura.hidden and root.timer.runes[1].hidden and root.timer.wings[1].armor[1].hidden,
+        'a fresh low-tier chain must not retain cap geometry')
+    Reset(mode)
+    Damage:PreviewDamageDoneMinigame(true)
+    Advance(0)
+    for i = 1, 240 do Advance(10) end
+    expect(Damage.minigameHighestTier == 6, 'all-tier preview must reach the cap in ' .. mode)
+    Reset(mode)
+    Damage:PreviewDamageDoneMinigame(true)
+    Advance(0)
+    for i = 1, 143 do Advance(17) end
+    expect(Damage.minigameHighestTier == 6, 'all-tier preview must tolerate frame jitter in ' .. mode)
+end
+
+Reset()
+Damage:AddDamageDone(2500000, true)
+Damage:AddDamageDone(2500000, true)
+expect(Damage.minigameShockwave.tier == 6 and Damage.minigameImpact.tier == 6,
+    'a rapid milestone burst must still upgrade to the cap animation')
+
+-- A rescued chain keeps its earned tier and does not replay a milestone.
+Reset()
+Damage:AddDamageDone(5000000, true)
+Advance(2000)
+expect(Damage.minigameHighestTier == 6 and not Damage.minigameAscension, 'drain retains earned tier after the transformation ends')
+Damage:AddDamageDone(2500000, false)
+expect(not Damage.minigameAscension, 're-crossing the same milestone must not replay ascension')
 
 -- Preview works over settings; real damage discards all simulated points and callbacks.
 Reset()

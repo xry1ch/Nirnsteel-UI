@@ -1560,9 +1560,9 @@ function Settings:PreviewDamageNumberCritSound()
     end
 end
 
-function Settings:PreviewDamageDoneMinigame()
+function Settings:PreviewDamageDoneMinigame(showTiers)
     if Nirnsteel_UI.DamageNumbers and Nirnsteel_UI.DamageNumbers.PreviewDamageDoneMinigame then
-        Nirnsteel_UI.DamageNumbers:PreviewDamageDoneMinigame()
+        Nirnsteel_UI.DamageNumbers:PreviewDamageDoneMinigame(showTiers)
     end
 end
 
@@ -3263,7 +3263,7 @@ function Settings:RegisterAddonMenu()
                 {
                     type = "checkbox",
                     name = "Show Combo Timer",
-                    tooltip = "Animate the underline to show remaining chain time. Turn off to keep a static underline.",
+                    tooltip = "Drain the gold in the crest's segmented metal wings to show remaining chain time. Turn off to keep the wings filled.",
                     getFunc = function() return self:GetDamageDoneMinigame().showTimer end,
                     setFunc = function(value) self:SetDamageDoneMinigameValue("showTimer", value) end,
                     disabled = function() return not self:IsDamageDoneMinigameEnabled() end,
@@ -3312,6 +3312,13 @@ function Settings:RegisterAddonMenu()
                     name = "Preview Minigame",
                     tooltip = "Preview rapid hits, critical impacts, milestones, the draining timer, and the final peak score. Real damage starts a fresh chain.",
                     func = function() self:PreviewDamageDoneMinigame() end,
+                    disabled = function() return not self:IsDamageDoneMinigameEnabled() end,
+                },
+                {
+                    type = "button",
+                    name = "Preview All Tiers",
+                    tooltip = "Climb through all six milestones in the selected mode, including the final transformation at 5 million damage or 140,000 DPS.",
+                    func = function() self:PreviewDamageDoneMinigame(true) end,
                     disabled = function() return not self:IsDamageDoneMinigameEnabled() end,
                 },
             },
