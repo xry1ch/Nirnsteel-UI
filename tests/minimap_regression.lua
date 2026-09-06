@@ -117,13 +117,21 @@ expect(M.tilePool[1].circleClip[1] ~= clipX, "moving refreshes drawable clipping
 expect(near(M.tilePool[1].circleClip[3], 160), "resize updates actual circular radius")
 M:ResetPosition(); config("diameter", 280)
 
--- Rotated clicks use the displayed transform, not the target camera heading.
+-- The unbound-by-default action uses the cursor and displayed transform,
+-- without requiring Ctrl or an accompanying mouse click.
 config("orientation", "rotating"); H.heading = 1.4; H:Tick()
 H:Mouse(30, -20); H.ctrl = true
-local mx, my = M:Unproject(30, -20)
 M:HandleClick(MOUSE_BUTTON_INDEX_LEFT)
+H.ctrl = false; M:HandleClick(MOUSE_BUTTON_INDEX_LEFT)
+expect(#H.pings == 0, "neither Ctrl-click nor plain left click places a waypoint")
+H.cursor = false; M:PlaceWaypointAtCursor()
+expect(#H.pings == 0, "keybind rejects a hidden cursor even before the next update")
+H.cursor = true
+expect(SI_BINDING_NAME_NIRNSTEEL_MINIMAP_WAYPOINT == "Minimap: Place Waypoint at Cursor", "keybind has a controls-menu label")
+local mx, my = M:Unproject(30, -20)
+M:PlaceWaypointAtCursor()
 expect(#H.pings == 1 and near(H.pings[1][3], mx) and near(H.pings[1][4], my), "rotated waypoint projection")
-H:Mouse(130, 130); M:HandleClick(MOUSE_BUTTON_INDEX_LEFT)
+H:Mouse(130, 130); M:PlaceWaypointAtCursor()
 expect(#H.pings == 1, "circle corner cannot place waypoint")
 H:Tick(); local wx, wy = M:Project(H.waypointX, H.waypointY)
 H:Mouse(wx, wy); H.ctrl = false; M:HandleClick(MOUSE_BUTTON_INDEX_RIGHT)
@@ -131,7 +139,7 @@ expect(H.removedWaypoints == 1, "right click removes only the hit personal waypo
 H:Mouse(80, 60); M:HandleClick(MOUSE_BUTTON_INDEX_RIGHT)
 expect(H.removedWaypoints == 1, "empty terrain cannot clear waypoint")
 config("orientation", "north"); H.x, H.y = 0.02, 0.02; H:Tick(); H:Mouse(-80, -80); H.ctrl = true
-M:HandleClick(MOUSE_BUTTON_INDEX_LEFT); expect(#H.pings == 1, "reject projected coordinates outside map bounds")
+M:PlaceWaypointAtCursor(); expect(#H.pings == 1, "reject projected coordinates outside map bounds")
 H.x, H.y, H.ctrl = 0.5, 0.5, false; H:Tick()
 H.waypointX, H.waypointY = 0.98, 0.5; H:Tick()
 expect(not M.waypointArrow.hidden and M:Contains(select(1, M.waypointArrow:GetCenter()) - select(1, M.viewport:GetCenter()), 0), "waypoint clamps inside circle")
@@ -170,7 +178,7 @@ H.x = 0.5; H:Tick(); expect(M.available, "valid player coordinates recover")
 for _, name in ipairs({ "worldMap", "gamepad_worldMap", "inventory" }) do
     H:SetScene("hud", SCENE_HIDING); expect(M.root.hidden, "hide at start of HUD transition")
     H:SetScene(name); H.map = 999; local changes = H.mapChanges
-    H:Tick(2000); M:RefreshMap(); H.ctrl = true; H:Mouse(0, 0); M:HandleClick(MOUSE_BUTTON_INDEX_LEFT)
+    H:Tick(2000); M:RefreshMap(); H.ctrl = true; H:Mouse(0, 0); M:PlaceWaypointAtCursor()
     expect(H.mapChanges == changes and H.map == 999 and not H.updates.NirnsteelUI_Minimap, "browsing owns map and suspends updates")
     H:SetScene("hud"); H:Tick()
     expect(H.map == H.playerMap and M.available and H.mapChanges == changes + 1, "closing menu resumes player map once")
@@ -206,7 +214,7 @@ config("zoom", 0 / 0); expect(S:GetMinimap().zoom == 2.5, "non-finite settings u
 
 H:SetScene("gameMenu"); M:SetSettingsPanelVisible(true)
 local changes, pings = H.mapChanges, #H.pings
-M:Preview(); H:Mouse(0, 0); H.ctrl = true; M:HandleClick(MOUSE_BUTTON_INDEX_LEFT)
+M:Preview(); H:Mouse(0, 0); H.ctrl = true; M:PlaceWaypointAtCursor()
 expect(M.preview and not M.root.hidden and H.mapChanges == changes and #H.pings == pings, "preview works in settings without selecting maps or creating waypoints")
 config("shape", "rectangle"); expect(M.preview and M.width == 420, "preview reflects settings live")
 M:SetSettingsPanelVisible(false); expect(not M.preview and M.root.hidden, "closing settings clears sample data")
@@ -300,7 +308,7 @@ for _, shape in ipairs({ "circle", "rectangle" }) do
                     fixedClip(pin.icon)
                     H.mouseX, H.mouseY = tx, ty
                     local pingCount = #H.pings
-                    M:HandleClick(MOUSE_BUTTON_INDEX_LEFT)
+                    M:PlaceWaypointAtCursor()
                     local ping = H.pings[#H.pings]
                     expect(#H.pings == pingCount + 1 and near(ping[3], pin.data.x, 0.002)
                         and near(ping[4], pin.data.y, 0.002), "clicking rendered terrain places the waypoint at its map coordinate")
@@ -348,4 +356,13 @@ for _, heading in ipairs({0, 0.7, math.pi, math.pi * 1.7}) do
 end
 config("orientation", "north")
 expect(M.angle == 0 and M.tilePool[1].textureRotation == 0 and near(M.player.textureRotation, H.heading), "north-up restores unrotated terrain and rotating player arrow")
+local pingCount = #H.pings
+H:Mouse(0, 0)
+for _, setting in ipairs({ "unlocked", "clickThrough" }) do
+    config(setting, true); M:PlaceWaypointAtCursor()
+    expect(#H.pings == pingCount, "keybind respects " .. setting)
+    config(setting, false)
+end
+config("enabled", false); M:PlaceWaypointAtCursor()
+expect(#H.pings == pingCount, "disabled module ignores its keybind")
 print("minimap_regression.lua: all checks passed")

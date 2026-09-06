@@ -283,6 +283,7 @@ function GetWorldName() return "EU Megaserver" end
 function GetDisplayName() return "@Test" end
 function GetCurrentCharacterId() return "123" end
 function GetString(v) return tostring(v) end
+function ZO_CreateStringId(name, value) _G[name] = value end
 function zo_round(v) return math.floor(v + 0.5) end
 function zo_strformat(_, v) return v or "" end
 local saved = {}

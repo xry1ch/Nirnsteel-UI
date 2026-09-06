@@ -3,6 +3,8 @@ local NS = ADDON_NAME .. "_Minimap"
 Nirnsteel_UI = Nirnsteel_UI or {}
 local Minimap = {}
 Nirnsteel_UI.Minimap = Minimap
+ZO_CreateStringId("SI_BINDING_NAME_NIRNSTEEL_MINIMAP_WAYPOINT", "Minimap: Place Waypoint at Cursor")
+ZO_CreateStringId("SI_BINDING_CATEGORY_NIRNSTEEL_UI", "Nirnsteel UI")
 
 local PI, TAU = math.pi, math.pi * 2
 local UPDATE_MS, MAP_CHECK_MS = 33, 1000
@@ -685,18 +687,29 @@ function Minimap:HitPin(x, y)
     return best
 end
 
-function Minimap:HandleClick(button)
-    if not self.interactive or self.preview or not self.available or not self:CanUseLiveMap()
+function Minimap:NavigationMousePoint()
+    local s = Settings()
+    if not s.enabled or s.unlocked or s.clickThrough or not IsGameCameraUIModeActive()
+        or not self.root or self.root:IsHidden() or self.preview or not self.available or not self:CanUseLiveMap()
         or self.mapKey ~= self:GetMapKey() or not DoesCurrentMapMatchMapForPlayerLocation() then return end
     local x, y = self:MousePoint()
     if not self:Contains(x, y) then return end
-    if button == MOUSE_BUTTON_INDEX_LEFT and IsControlKeyDown() then
-        local mx, my = self:Unproject(x, y)
-        if ValidPoint(mx, my) then PingMap(MAP_PIN_TYPE_PLAYER_WAYPOINT, MAP_TYPE_LOCATION_CENTERED, mx, my) end
-    elseif button == MOUSE_BUTTON_INDEX_RIGHT then
-        local pin = self:HitPin(x, y)
-        if pin and pin.kind == "waypoint" then RemovePlayerWaypoint() end
-    end
+    return x, y
+end
+
+function Minimap:PlaceWaypointAtCursor()
+    local x, y = self:NavigationMousePoint()
+    if x == nil then return end
+    local mx, my = self:Unproject(x, y)
+    if ValidPoint(mx, my) then PingMap(MAP_PIN_TYPE_PLAYER_WAYPOINT, MAP_TYPE_LOCATION_CENTERED, mx, my) end
+end
+
+function Minimap:HandleClick(button)
+    if button ~= MOUSE_BUTTON_INDEX_RIGHT then return end
+    local x, y = self:NavigationMousePoint()
+    if x == nil then return end
+    local pin = self:HitPin(x, y)
+    if pin and pin.kind == "waypoint" then RemovePlayerWaypoint() end
 end
 
 function Minimap:ChangeZoom(delta)

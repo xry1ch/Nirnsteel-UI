@@ -2840,7 +2840,7 @@ function Settings:BuildMinimapControls()
     end
     Add("checkbox", "Enable Minimap", "enabled")
     Add("checkbox", "Unlock Position", "unlocked", {
-        tooltip = "With the cursor visible, drag anywhere on the minimap or its header. Position is saved on this server. Waypoint clicks are disabled while unlocked.",
+        tooltip = "With the cursor visible, drag anywhere on the minimap or its header. Position is saved on this server. Waypoint placement is disabled while unlocked.",
     })
     Slider("Quest Tracker Vertical Offset", "questTrackerOffset", 0, 600, 5, {
         tooltip = "Move the native quest tracker down by this many UI pixels to make room for the minimap at the top right. Zero restores its normal position. The offset is removed while Minimap is disabled.",
@@ -2889,7 +2889,7 @@ function Settings:BuildMinimapControls()
     Add("checkbox", "Click Through", "clickThrough", { tooltip = "Make the map passive while locked. Unlock Position and Preview remain available here." })
     Add("checkbox", "Mouse Wheel Zoom", "wheelZoom", { disabled = function() return self:GetMinimap().clickThrough end })
     Add("checkbox", "Marker Tooltips", "tooltips", { disabled = function() return self:GetMinimap().clickThrough end })
-    controls[#controls + 1] = { type = "description", text = "With the cursor visible: Ctrl + left click places a waypoint; right click its marker to remove it. Hover the map for zoom and world-map buttons. Gamepad navigation uses the full world map." }
+    controls[#controls + 1] = { type = "description", text = "Assign Minimap: Place Waypoint at Cursor under Controls > Keybindings > Nirnsteel UI (unbound by default). With the cursor over the map, press your assigned key to place a waypoint; right click its marker to remove it. Hover for zoom and world-map buttons. Gamepad navigation uses the full world map." }
     for _, entry in ipairs({ { "Preview", "Preview" }, { "Reset Position", "ResetPosition" } }) do
         local name, method = entry[1], entry[2]
         controls[#controls + 1] = {
