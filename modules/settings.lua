@@ -408,6 +408,7 @@ local ACCOUNT_DEFAULTS =
                 unlocked = false,
                 scale = 100,
                 soundEnabled = true,
+                tierSoundsEnabled = true,
                 faceRight = false,
                 displayMode = "damageDone",
                 graceMS = 1250,
@@ -3215,6 +3216,15 @@ function Settings:RegisterAddonMenu()
                     setFunc = function(value) self:SetDamageDoneMinigameValue("soundEnabled", value) end,
                     disabled = function() return not self:IsDamageDoneMinigameEnabled() end,
                     default = ACCOUNT_DEFAULTS.modules.damageNumbers.damageDoneMinigame.soundEnabled,
+                },
+                {
+                    type = "checkbox",
+                    name = "Tier Progression Sounds",
+                    tooltip = "Play a different sound when each new tier is reached, building to a final victory sound at the cap. Applies to Damage Done and DPS. Turn off to keep only normal and critical hit sounds. Preview All Tiers demonstrates the progression.",
+                    getFunc = function() return self:GetDamageDoneMinigame().tierSoundsEnabled end,
+                    setFunc = function(value) self:SetDamageDoneMinigameValue("tierSoundsEnabled", value) end,
+                    disabled = function() return not self:IsDamageDoneMinigameEnabled() or not self:AreDamageDoneMinigameSoundsEnabled() end,
+                    default = ACCOUNT_DEFAULTS.modules.damageNumbers.damageDoneMinigame.tierSoundsEnabled,
                 },
                 {
                     type = "checkbox",

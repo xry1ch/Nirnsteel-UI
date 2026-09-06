@@ -30,6 +30,7 @@ local DEFAULT_SETTINGS =
         unlocked = false,
         scale = 100,
         soundEnabled = true,
+        tierSoundsEnabled = true,
         faceRight = false,
         displayMode = "damageDone",
         graceMS = 1250,
@@ -81,6 +82,16 @@ local MINIGAME_SOUND_KEYS =
     normal = "OUTFIT_WEAPON_TYPE_RUNE",
     crit = "VENGEANCE_PERK_EQUIPPED",
     milestone = "VENGEANCE_PERK_DROP",
+}
+
+local MINIGAME_TIER_SOUND_KEYS =
+{
+    "CHAMPION_STAR_STAGE_UP",
+    "VENGEANCE_PERK_DROP",
+    "CODE_REDEMPTION_SUCCESS",
+    "VENGEANCE_PERK_EQUIPPED",
+    "BATTLEGROUND_ROUND_RECAP_SCREEN_WIN",
+    "BATTLEGROUND_ROUND_RECAP_SCREEN_FINAL_WIN",
 }
 
 local FONT_FACES =
@@ -398,23 +409,29 @@ local function PlayCriticalSound()
     end
 end
 
-local function GetMinigameSound(kind)
+local function GetMinigameSound(kind, tier)
+    if kind == "milestone" then
+        local tierKey = MINIGAME_TIER_SOUND_KEYS[tier]
+        if tierKey and SOUNDS and SOUNDS[tierKey] then
+            return SOUNDS[tierKey]
+        end
+    end
     local key = MINIGAME_SOUND_KEYS[kind]
-    return key and SOUNDS[key] or nil
+    return key and SOUNDS and SOUNDS[key] or nil
 end
 
-local function PlayMinigameSound(kind)
+local function PlayMinigameSound(kind, tier)
     if not AreMinigameSoundsEnabled() then
         return false
     end
 
     local nowMS = GetFrameTimeMilliseconds()
-    local priority = kind == "milestone" and 3 or (kind == "crit" and 2 or 1)
+    local priority = kind == "milestone" and (2 + (tier or 1)) or (kind == "crit" and 2 or 1)
     if nowMS - lastMinigameSoundMS < MINIGAME_SOUND_THROTTLE_MS and priority <= lastMinigameSoundPriority then
         return true
     end
 
-    local sound = GetMinigameSound(kind)
+    local sound = GetMinigameSound(kind, tier)
     if not sound and kind ~= "normal" then
         sound = GetMinigameSound("normal")
     end
@@ -1241,8 +1258,9 @@ function DamageNumbers:AddDamageDone(hitValue, isCrit, isPreview)
     self:TriggerMinigameImpact(hitValue, isCrit, isMilestone)
     self:StartMinigameUpdating()
 
-    local soundKind = isMilestone and "milestone" or (isCrit and "crit" or "normal")
-    return PlayMinigameSound(soundKind)
+    local tierSound = isMilestone and GetMinigameSettingValue("tierSoundsEnabled") ~= false
+    local soundKind = tierSound and "milestone" or (isCrit and "crit" or "normal")
+    return PlayMinigameSound(soundKind, newTier)
 end
 
 function DamageNumbers:UpdateMinigameDeltas(nowMS)

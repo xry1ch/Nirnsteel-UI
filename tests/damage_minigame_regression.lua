@@ -99,6 +99,10 @@ function EVENT_MANAGER:AddFilterForEvent() end
 HUD_SCENE = { showing = true, IsShowing = function(self) return self.showing end }
 SLASH_COMMANDS = {}
 SOUNDS = { OUTFIT_WEAPON_TYPE_RUNE = 'normal', VENGEANCE_PERK_EQUIPPED = 'crit', VENGEANCE_PERK_DROP = 'milestone' }
+SOUNDS.CHAMPION_STAR_STAGE_UP = 'tier1'
+SOUNDS.CODE_REDEMPTION_SUCCESS = 'tier3'
+SOUNDS.BATTLEGROUND_ROUND_RECAP_SCREEN_WIN = 'tier5'
+SOUNDS.BATTLEGROUND_ROUND_RECAP_SCREEN_FINAL_WIN = 'tier6'
 function PlaySound(sound) sounds[#sounds + 1] = sound end
 local nowMS = 10000
 function GetFrameTimeMilliseconds() return nowMS end
@@ -339,6 +343,42 @@ Advance(2000)
 expect(Damage.minigameHighestTier == 6 and not Damage.minigameAscension, 'drain retains earned tier after the transformation ends')
 Damage:AddDamageDone(2500000, false)
 expect(not Damage.minigameAscension, 're-crossing the same milestone must not replay ascension')
+
+-- Tier audio defaults on, follows both modes, and respects the sound switches.
+local tierSounds = {'tier1', 'milestone', 'tier3', 'crit', 'tier5', 'tier6'}
+for _, mode in ipairs({'damageDone', 'dps'}) do
+    Reset(mode)
+    settings.tierSoundsEnabled = nil -- Existing saved settings use the enabled default.
+    Damage:PreviewDamageDoneMinigame(true)
+    Advance(0)
+    for index = 1, 6 do
+        for tick = 1, 40 do Advance(10) end
+        expect(sounds[#sounds] == tierSounds[index], 'each new tier must have its own sound in ' .. mode)
+    end
+    expect(#sounds == 7, 'the preview must play one opening hit and six tier sounds')
+end
+Reset()
+Damage:AddDamageDone(2500000, false)
+Damage:AddDamageDone(2500000, false)
+expect(#sounds == 2 and sounds[1] == 'tier5' and sounds[2] == 'tier6', 'higher tiers must supersede audio throttling; skipped tiers must not play')
+Advance(2000)
+Damage:AddDamageDone(2500000, false)
+expect(sounds[#sounds] == 'normal', 'rescuing a chain must not replay an earned tier sound')
+Reset()
+settings.tierSoundsEnabled = false
+Damage:AddDamageDone(100000, true)
+expect(#sounds == 1 and sounds[1] == 'crit', 'disabling tier sounds must preserve critical hit audio')
+Reset()
+settings.tierSoundsEnabled, settings.soundEnabled = true, false
+Damage:AddDamageDone(5000000, true)
+expect(#sounds == 0, 'the master sound switch must also mute tier progression')
+settings.soundEnabled = true
+Reset()
+local firstTierSound = SOUNDS.CHAMPION_STAR_STAGE_UP
+SOUNDS.CHAMPION_STAR_STAGE_UP = nil
+Damage:AddDamageDone(100000, false)
+expect(sounds[1] == 'milestone', 'missing tier sound keys must fall back to the existing milestone sound')
+SOUNDS.CHAMPION_STAR_STAGE_UP = firstTierSound
 
 -- Preview works over settings; real damage discards all simulated points and callbacks.
 Reset()
