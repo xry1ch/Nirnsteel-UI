@@ -32,6 +32,12 @@ local DEFAULT_SETTINGS =
         soundEnabled = true,
         faceRight = false,
         displayMode = "damageDone",
+        graceMS = 1250,
+        animationIntensity = 80,
+        showTimer = true,
+        showModeLabel = true,
+        showHitCount = true,
+        showPeakLabel = true,
     },
 }
 
@@ -49,12 +55,12 @@ local MINIGAME_WIDTH = 560
 local MINIGAME_HEIGHT = 240
 local MINIGAME_TILT_RADIANS = math.rad(6)
 local MINIGAME_SKEW_RADIANS = math.rad(4)
-local MINIGAME_GRACE_MS = 750
 local MINIGAME_DRAIN_MS = 1500
 local MINIGAME_COUNT_MS = 170
 local MINIGAME_IMPACT_MS = 430
 local MINIGAME_CRIT_IMPACT_MS = 620
-local MINIGAME_FINISH_MS = 360
+local MINIGAME_FINISH_MS = 900
+local MINIGAME_FEEDBACK_MS = 100
 local MINIGAME_DELTA_MS = 560
 local MINIGAME_SOUND_THROTTLE_MS = 110
 local MINIGAME_DELTA_COUNT = 4
@@ -181,6 +187,7 @@ AddFlag(PLAYER_RELATED_TARGET_TYPES, COMBAT_UNIT_TYPE_PLAYER_COMPANION)
 
 local lastCritSoundMS = -DEFAULT_SETTINGS.soundThrottleMS
 local lastMinigameSoundMS = -MINIGAME_SOUND_THROTTLE_MS
+local lastMinigameSoundPriority = 0
 
 local function RegisterFilteredCombatEvent(namespace, unitFilterType, unitType, result, callback)
     EVENT_MANAGER:RegisterForEvent(namespace, EVENT_COMBAT_EVENT, callback)
@@ -289,11 +296,6 @@ end
 local function EaseOutQuart(progress)
     local inverse = 1 - progress
     return 1 - inverse * inverse * inverse * inverse
-end
-
-local function Pulse01(progress)
-    progress = math.min(math.max(progress or 0, 0), 1)
-    return math.sin(progress * math.pi)
 end
 
 local function BuildFont(size)
@@ -405,7 +407,8 @@ local function PlayMinigameSound(kind)
     end
 
     local nowMS = GetFrameTimeMilliseconds()
-    if nowMS - lastMinigameSoundMS < MINIGAME_SOUND_THROTTLE_MS then
+    local priority = kind == "milestone" and 3 or (kind == "crit" and 2 or 1)
+    if nowMS - lastMinigameSoundMS < MINIGAME_SOUND_THROTTLE_MS and priority <= lastMinigameSoundPriority then
         return true
     end
 
@@ -416,6 +419,7 @@ local function PlayMinigameSound(kind)
     if sound then
         PlaySound(sound)
         lastMinigameSoundMS = nowMS
+        lastMinigameSoundPriority = priority
         return true
     end
     return false
@@ -447,6 +451,14 @@ end
 
 local function IsMinigameDpsMode()
     return GetMinigameDisplayMode() == "dps"
+end
+
+local function GetMinigameGraceMS()
+    return ClampNumber(tonumber(GetMinigameSettingValue("graceMS")) or 1250, 500, 3000)
+end
+
+local function GetMinigameMotion()
+    return ClampNumber(tonumber(GetMinigameSettingValue("animationIntensity")) or 80, 0, 150) / 100
 end
 
 local function GetMinigameFacingSign()
@@ -692,29 +704,27 @@ function DamageNumbers:GetMinigameRoot()
     root.outerGlow = outerGlow
 
     local accentBack = wm:CreateControl(nil, visual, CT_BACKDROP)
-    accentBack:SetDimensions(390, 5)
-    accentBack:SetAnchor(CENTER, visual, CENTER, 8 * GetMinigameFacingSign(), 35)
-    accentBack:SetCenterColor(0.38, 0.20, 0.03, 0.48)
+    accentBack:SetDimensions(310, 3)
+    accentBack:SetAnchor(CENTER, visual, CENTER, 0, 53)
+    accentBack:SetCenterColor(0.70, 0.44, 0.12, 0.22)
     accentBack:SetEdgeColor(0, 0, 0, 0)
-    accentBack:SetTransformRotationZ(math.rad(3) * GetMinigameFacingSign())
     accentBack:SetDrawLayer(DL_BACKGROUND)
     root.accentBack = accentBack
 
     local accentFront = wm:CreateControl(nil, visual, CT_BACKDROP)
-    accentFront:SetDimensions(310, 2)
-    accentFront:SetAnchor(CENTER, visual, CENTER, -16 * GetMinigameFacingSign(), 43)
+    accentFront:SetDimensions(310, 3)
+    accentFront:SetAnchor(CENTER, visual, CENTER, 0, 53)
     accentFront:SetCenterColor(1.00, 0.72, 0.16, 0.72)
     accentFront:SetEdgeColor(0, 0, 0, 0)
-    accentFront:SetTransformRotationZ(math.rad(3) * GetMinigameFacingSign())
     accentFront:SetDrawLayer(DL_BACKGROUND)
     root.accentFront = accentFront
 
-    local shockwave = wm:CreateControl(nil, visual, CT_BACKDROP)
-    shockwave:SetDimensions(390, 126)
-    shockwave:SetAnchor(CENTER, visual, CENTER, 0, 0)
-    shockwave:SetCenterColor(1.00, 0.48, 0.05, 0.02)
-    shockwave:SetEdgeColor(1.00, 0.72, 0.18, 1)
-    shockwave:SetEdgeTexture(MINIGAME_EDGE_TEXTURE, 128, 16, 9, 0)
+    local shockwave = wm:CreateControl(nil, visual, CT_TEXTURE)
+    shockwave:SetDimensions(350, 12)
+    shockwave:SetAnchor(CENTER, visual, CENTER, 0, 53)
+    shockwave:SetTexture(MINIGAME_HIGHLIGHT_TEXTURE)
+    shockwave:SetBlendMode(TEX_BLEND_MODE_ADD)
+    shockwave:SetColor(1.00, 0.72, 0.18, 1)
     shockwave:SetDrawLayer(DL_BACKGROUND)
     shockwave:SetTransformNormalizedOriginPoint(0.5, 0.5)
     shockwave:SetAlpha(0)
@@ -751,7 +761,7 @@ function DamageNumbers:GetMinigameRoot()
     shadowLabel:SetFont(BuildMinigameFont(86))
     shadowLabel:SetHorizontalAlignment(TEXT_ALIGN_CENTER)
     shadowLabel:SetVerticalAlignment(TEXT_ALIGN_CENTER)
-    shadowLabel:SetColor(0.12, 0.035, 0.008, 0.96)
+    shadowLabel:SetColor(0.015, 0.009, 0.006, 1)
     shadowLabel:SetDrawLayer(DL_CONTROLS)
     root.shadowLabel = shadowLabel
 
@@ -777,6 +787,19 @@ function DamageNumbers:GetMinigameRoot()
     impactFlash:SetColor(1.00, 0.82, 0.30, 1)
     impactFlash:SetAlpha(0)
     root.impactFlash = impactFlash
+
+    -- Keep supporting information outside the large score's silhouette.
+    local caption = wm:CreateControl(nil, visual, CT_LABEL)
+    caption:SetDimensions(440, 28)
+    caption:SetAnchor(CENTER, visual, CENTER, 0, 74)
+    caption:SetFont(BuildMinigameFont(18, "soft-shadow-thick"))
+    caption:SetHorizontalAlignment(TEXT_ALIGN_CENTER)
+    caption:SetVerticalAlignment(TEXT_ALIGN_CENTER)
+    caption:SetColor(0.92, 0.85, 0.66, 1)
+    caption:SetDrawLayer(DL_OVERLAY)
+    root.caption = caption
+
+    root.timer = accentFront
 
     root.deltas = {}
     for index = 1, MINIGAME_DELTA_COUNT do
@@ -897,12 +920,6 @@ function DamageNumbers:ApplyMinigameLayout()
     if not self.minigameImpact and not self.minigameFinisher then
         root.visual:SetTransformRotationZ(GetMinigameBaseRotation())
     end
-    root.accentBack:SetTransformRotationZ(math.rad(3) * GetMinigameFacingSign())
-    root.accentFront:SetTransformRotationZ(math.rad(3) * GetMinigameFacingSign())
-    root.accentBack:ClearAnchors()
-    root.accentBack:SetAnchor(CENTER, root.visual, CENTER, 8 * GetMinigameFacingSign(), 35)
-    root.accentFront:ClearAnchors()
-    root.accentFront:SetAnchor(CENTER, root.visual, CENTER, -16 * GetMinigameFacingSign(), 43)
     root.outerGlow:SetTextureCoords(textureLeft, textureRight, 0, 0.75)
     root.impactFlash:SetTextureCoords(textureLeft, textureRight, 0, 0.75)
 
@@ -975,29 +992,43 @@ function DamageNumbers:AcquireMinigameDelta()
 end
 
 function DamageNumbers:ShowMinigameDelta(hitValue, isCrit, strength)
-    local delta = self:AcquireMinigameDelta()
+    local nowMS = GetFrameTimeMilliseconds()
+    local delta = self.minigameLastDelta
+    local data = delta and delta.minigameData
+    if data and nowMS - data.startMS < MINIGAME_FEEDBACK_MS then
+        -- AoE and DoT bursts share a readable delta, without losing any damage.
+        data.value = data.value + hitValue
+        data.isCrit = data.isCrit or isCrit
+        delta:SetText("+" .. FormatMinigameValue(data.value))
+        delta:SetFont(BuildMinigameFont(data.isCrit and 32 or 26))
+        delta:SetColor(1, data.isCrit and 0.92 or 0.76, data.isCrit and 0.36 or 0.24, 1)
+        return
+    end
+    delta = self:AcquireMinigameDelta()
     if not delta then
         return
     end
 
     local direction = ((self.nextMinigameDeltaDirection or -1) * -1)
     self.nextMinigameDeltaDirection = direction
-    delta:SetFont(BuildMinigameFont(isCrit and 34 or 26))
+    delta:SetFont(BuildMinigameFont(isCrit and 32 or 26))
     delta:SetText("+" .. FormatMinigameValue(hitValue))
     delta:SetColor(isCrit and 1.00 or 0.96, isCrit and 0.92 or 0.76, isCrit and 0.36 or 0.24, 1)
     delta:SetAlpha(1)
     delta:SetHidden(false)
     delta.minigameData =
     {
-        startMS = GetFrameTimeMilliseconds(),
+        startMS = nowMS,
+        value = hitValue,
         durationMS = MINIGAME_DELTA_MS + (isCrit and 120 or 0),
-        baseX = direction * math.random(22, 74),
+        baseX = direction * 100,
         driftX = direction * (18 + strength * 16),
-        baseY = -58 - math.random(0, 16),
+        baseY = -78,
         driftY = -(36 + strength * 18),
         startScale = isCrit and 1.42 or 1.12,
         isCrit = isCrit,
     }
+    self.minigameLastDelta = delta
 end
 
 function DamageNumbers:TriggerMinigameImpact(hitValue, isCrit, isMilestone)
@@ -1008,6 +1039,18 @@ function DamageNumbers:TriggerMinigameImpact(hitValue, isCrit, isMilestone)
     end
     if isMilestone then
         strength = math.max(strength, 1.75)
+    end
+
+    self:ShowMinigameDelta(hitValue, isCrit, strength)
+    local previous = self.minigameImpact
+    if previous then
+        local ageMS = nowMS - previous.startMS
+        local priority = isMilestone and 3 or (isCrit and 2 or 1)
+        local previousPriority = previous.isMilestone and 3 or (previous.isCrit and 2 or 1)
+        if (ageMS < MINIGAME_FEEDBACK_MS and priority <= previousPriority)
+            or (ageMS < 220 and priority < previousPriority) then
+            return
+        end
     end
 
     self.minigameImpactDirection = (self.minigameImpactDirection or -1) * -1
@@ -1036,14 +1079,11 @@ function DamageNumbers:TriggerMinigameImpact(hitValue, isCrit, isMilestone)
             phase = math.random() * math.pi,
         }
     end
-
-    self:ShowMinigameDelta(hitValue, isCrit, strength)
 end
 
 function DamageNumbers:StartMinigameUpdating()
     local root = self:GetMinigameRoot()
-    root:SetHidden(false)
-    root:SetAlpha(IsMinigameUnlocked() and 0 or 1)
+    self:UpdateDamageDoneMinigame()
     root:SetHandler("OnUpdate", function()
         self:UpdateDamageDoneMinigame()
     end)
@@ -1055,16 +1095,25 @@ function DamageNumbers:AddDamageDone(hitValue, isCrit, isPreview)
     end
 
     if not isPreview then
+        if self.minigamePreviewing then
+            self:ResetDamageDoneMinigame(true)
+        end
         self.minigamePreviewId = (self.minigamePreviewId or 0) + 1
     end
 
     local nowMS = GetFrameTimeMilliseconds()
+    -- Resolve the old streak at the event's timestamp, even if OnUpdate stalled.
+    self:UpdateMinigameScore(nowMS)
+    if self.minigameFinisher then
+        self:ResetDamageDoneMinigame(false)
+    end
+    self.minigamePreviewing = isPreview == true
     local currentScore = math.max(0, self.minigameScore or 0)
     local previousTier = self.minigameHighestTier or 0
     local newScore
 
     if IsMinigameDpsMode() then
-        if not self.minigameDpsStartMS or currentScore <= 0 or self.minigameDrainStartMS then
+        if not self.minigameDpsStartMS then
             self.minigameDpsStartMS = nowMS
             self.minigameDpsTotalDamage = 0
             previousTier = 0
@@ -1083,13 +1132,17 @@ function DamageNumbers:AddDamageDone(hitValue, isCrit, isPreview)
     self.minigameCountTargetValue = newScore
     self.minigameCountStartMS = nowMS
     self.minigameDisplayScore = self.minigameCountStartValue
-    self.minigameGraceUntilMS = nowMS + MINIGAME_GRACE_MS
+    self.minigameGraceUntilMS = nowMS + GetMinigameGraceMS()
     self.minigameDrainStartMS = nil
     self.minigameDrainStartValue = nil
     self.minigameFinisher = nil
     self.minigameHighestTier = math.max(previousTier, newTier)
+    self.minigameHitCount = (self.minigameHitCount or 0) + 1
+    self.minigamePeak = math.max(self.minigamePeak or 0, newScore)
 
-    self:ApplyMinigameLayout()
+    if currentScore <= 0 then
+        self:ApplyMinigameLayout()
+    end
     self:ApplyMinigameText(self.minigameDisplayScore)
     self:TriggerMinigameImpact(hitValue, isCrit, isMilestone)
     self:StartMinigameUpdating()
@@ -1116,8 +1169,9 @@ function DamageNumbers:UpdateMinigameDeltas(nowMS)
                 local x = data.baseX + data.driftX * eased
                 local y = data.baseY + data.driftY * eased
                 local scale = 1 + (data.startScale - 1) * (1 - EaseOutBack(ClampNumber(progress / 0.42, 0, 1)))
-                delta:SetTransformOffset(x, y, 0)
-                delta:SetTransformScale(scale)
+                local motion = GetMinigameMotion()
+                delta:SetTransformOffset(data.baseX + (x - data.baseX) * motion, data.baseY + (y - data.baseY) * motion, 0)
+                delta:SetTransformScale(1 + (scale - 1) * motion)
                 delta:SetAlpha(ClampNumber(alpha, 0, 1))
             end
         end
@@ -1127,7 +1181,8 @@ end
 function DamageNumbers:UpdateMinigameSparks(nowMS)
     local root = self:GetMinigameRoot()
     local data = self.minigameSparks
-    if not data then
+    local motion = GetMinigameMotion()
+    if not data or motion == 0 then
         for _, spark in ipairs(root.sparks) do
             spark:SetAlpha(0)
             spark:SetHidden(true)
@@ -1148,14 +1203,14 @@ function DamageNumbers:UpdateMinigameSparks(nowMS)
     local eased = EaseOutQuart(progress)
     for index, spark in ipairs(root.sparks) do
         local angle = data.phase + ((index - 1) / #root.sparks) * math.pi * 2
-        local distance = 28 + eased * (82 + data.strength * 22)
+        local distance = 28 + eased * (82 + data.strength * 22) * motion
         local x = math.cos(angle) * distance
         local y = math.sin(angle) * distance * 0.56
         spark:ClearAnchors()
         spark:SetAnchor(CENTER, root.visual, CENTER, x, y)
         spark:SetTransformRotationZ(angle + math.pi * 0.5)
         spark:SetTransformScale(0.72 + data.strength * 0.24 + progress * 0.32)
-        spark:SetAlpha((1 - progress) * math.min(1, 0.62 + data.strength * 0.22))
+        spark:SetAlpha((1 - progress) * math.min(1, 0.62 + data.strength * 0.22) * math.min(motion, 1))
         spark:SetHidden(false)
     end
 end
@@ -1171,6 +1226,10 @@ function DamageNumbers:UpdateMinigameVisuals(nowMS)
     local idlePulse = 0.5 + math.sin(nowMS * 0.008) * 0.5
     local glowAlpha = self.minigameScore and self.minigameScore > 0 and (0.16 + idlePulse * 0.08) or 0
     local flashAlpha = 0
+    local motion = GetMinigameMotion()
+
+    root.echoRed:SetAlpha(0)
+    root.echoGold:SetAlpha(0)
 
     local impact = self.minigameImpact
     if impact then
@@ -1186,19 +1245,19 @@ function DamageNumbers:UpdateMinigameVisuals(nowMS)
         else
             local envelope = (1 - progress) * (1 - progress)
             local spring = math.cos(progress * math.pi * 5) * envelope
-            local peak = 0.10 + impact.strength * 0.12 + (impact.isCrit and 0.14 or 0)
+            local peak = 0.035 + impact.strength * 0.10 + (impact.isCrit and 0.09 or 0)
             scale = 1 + peak * envelope + spring * 0.045
             rotation = baseRotation + math.rad(impact.direction * (2.2 + impact.strength * 2.8)) * envelope
-            local jitter = impact.strength * 2.8 * envelope
-            offsetX = math.sin((nowMS - impact.startMS) * 0.19) * jitter
-            offsetY = math.cos((nowMS - impact.startMS) * 0.23) * jitter * 0.55
+            local recoil = impact.strength * 3.5 * envelope
+            offsetX = impact.direction * recoil * math.sin(progress * math.pi * 3)
+            offsetY = -recoil * math.sin(progress * math.pi)
             glowAlpha = math.min(1, 0.28 + envelope * (0.34 + impact.strength * 0.20))
             flashAlpha = envelope * (0.42 + impact.strength * 0.30)
 
             if impact.isCrit or impact.isMilestone then
                 local echoAlpha = envelope * (impact.isMilestone and 0.86 or 0.64)
-                root.echoRed:SetAlpha(echoAlpha)
-                root.echoGold:SetAlpha(echoAlpha * 0.88)
+                root.echoRed:SetAlpha(echoAlpha * math.min(motion, 1))
+                root.echoGold:SetAlpha(echoAlpha * 0.88 * math.min(motion, 1))
                 root.echoRed:SetTransformOffset(-10 * impact.direction * (1 - progress), 2, 0)
                 root.echoGold:SetTransformOffset(8 * impact.direction * (1 - progress), -2, 0)
                 root.echoRed:SetTransformScale(1 + envelope * 0.10)
@@ -1218,33 +1277,63 @@ function DamageNumbers:UpdateMinigameVisuals(nowMS)
         else
             root.shockwave:SetHidden(false)
             root.shockwave:SetTransformScale(0.90 + EaseOutCubic(progress) * (0.72 + shockwave.strength * 0.12))
-            root.shockwave:SetAlpha((1 - progress) * math.min(1, 0.66 + shockwave.strength * 0.18))
+            root.shockwave:SetAlpha((1 - progress) * math.min(1, 0.66 + shockwave.strength * 0.18) * math.min(motion, 1))
         end
     end
 
     local finisher = self.minigameFinisher
     if finisher then
         local progress = ClampNumber((nowMS - finisher.startMS) / finisher.durationMS, 0, 1)
-        if progress < 0.24 then
-            scale = 1 + EaseOutBack(progress / 0.24) * 0.14
-        else
-            scale = 1.14 - EaseOutCubic((progress - 0.24) / 0.76) * 0.52
-        end
-        rotation = baseRotation + math.rad(9) * GetMinigameFacingSign() * EaseOutCubic(progress)
-        root:SetAlpha(progress < 0.32 and 1 or ClampNumber(1 - ((progress - 0.32) / 0.68), 0, 1))
-        glowAlpha = (1 - progress) * 0.40
-        flashAlpha = progress < 0.18 and Pulse01(progress / 0.18) * 0.72 or 0
+        local exitProgress = ClampNumber((progress - 0.55) / 0.45, 0, 1)
+        scale = 1 - EaseOutCubic(exitProgress) * 0.14
+        rotation = baseRotation
+        offsetX, offsetY = 0, -12 * EaseOutCubic(exitProgress)
+        root:SetAlpha(1 - exitProgress)
+        glowAlpha = (1 - progress) * 0.20
+        flashAlpha = 0
     else
         root:SetAlpha(1)
     end
 
-    visual:SetTransformScale(scale)
-    visual:SetTransformRotationZ(rotation)
-    visual:SetTransformOffset(offsetX, offsetY, 0)
+    visual:SetTransformScale(1 + (scale - 1) * motion)
+    visual:SetTransformRotationZ(baseRotation + (rotation - baseRotation) * motion)
+    visual:SetTransformOffset(offsetX * motion, offsetY * motion, 0)
     root.outerGlow:SetAlpha(ClampNumber(glowAlpha, 0, 1))
-    root.impactFlash:SetAlpha(ClampNumber(flashAlpha, 0, 1))
+    root.impactFlash:SetAlpha(ClampNumber(flashAlpha * motion * 0.65, 0, 1))
+    self:UpdateMinigameDetails(nowMS)
     self:UpdateMinigameDeltas(nowMS)
     self:UpdateMinigameSparks(nowMS)
+end
+
+function DamageNumbers:UpdateMinigameDetails(nowMS)
+    local root = self:GetMinigameRoot()
+    local showTimer = GetMinigameSettingValue("showTimer") ~= false
+    local remaining = (self.minigameGraceUntilMS or nowMS) - nowMS
+    local draining = remaining < 0
+    local fraction = (remaining + MINIGAME_DRAIN_MS) / (GetMinigameGraceMS() + MINIGAME_DRAIN_MS)
+    if not showTimer or self.minigameFinisher then
+        fraction, draining = 1, false
+    end
+    root.timer:SetDimensions(math.max(1, 310 * ClampNumber(fraction, 0, 1)), draining and 2 or 3)
+    root.timer:SetCenterColor(1, draining and 0.34 or 0.78, draining and 0.12 or 0.3, 0.9)
+    local mode = IsMinigameDpsMode() and "DPS" or "DAMAGE DONE"
+    local count = self.minigameHitCount or 0
+    local parts = {}
+    local showMode = GetMinigameSettingValue("showModeLabel") ~= false
+    if self.minigameFinisher and GetMinigameSettingValue("showPeakLabel") ~= false then
+        parts[#parts + 1] = showMode and ("PEAK " .. mode) or "PEAK"
+    elseif showMode then
+        parts[#parts + 1] = mode
+    end
+    if GetMinigameSettingValue("showHitCount") ~= false then
+        parts[#parts + 1] = string.format("%d %s", count, count == 1 and "HIT" or "HITS")
+    end
+    local text = table.concat(parts, "  /  ")
+    if root.captionText ~= text then
+        root.caption:SetText(text)
+        root.captionText = text
+    end
+    root.caption:SetHidden(text == "")
 end
 
 function DamageNumbers:ResetDamageDoneMinigame(cancelPreview)
@@ -1267,6 +1356,10 @@ function DamageNumbers:ResetDamageDoneMinigame(cancelPreview)
     self.minigameShockwave = nil
     self.minigameSparks = nil
     self.minigameFinisher = nil
+    self.minigameHitCount = nil
+    self.minigamePeak = nil
+    self.minigamePreviewing = nil
+    self.minigameLastDelta = nil
 
     local root = self.minigameRoot
     if root then
@@ -1297,29 +1390,27 @@ function DamageNumbers:ResetDamageDoneMinigame(cancelPreview)
     end
 end
 
-function DamageNumbers:UpdateDamageDoneMinigame()
-    if not IsMinigameEnabled() then
-        self:ResetDamageDoneMinigame(true)
+function DamageNumbers:UpdateMinigameScore(nowMS)
+    local score = math.max(0, self.minigameScore or 0)
+    if score <= 0 or self.minigameFinisher then
         return
     end
-
-    local nowMS = GetFrameTimeMilliseconds()
-    local score = math.max(0, self.minigameScore or 0)
+    local graceUntilMS = self.minigameGraceUntilMS or nowMS
 
     if IsMinigameDpsMode()
         and score > 0
         and not self.minigameDrainStartMS
         and self.minigameDpsStartMS then
-        score = CalculateMinigameDps(self.minigameDpsTotalDamage, self.minigameDpsStartMS, nowMS)
+        score = CalculateMinigameDps(self.minigameDpsTotalDamage, self.minigameDpsStartMS, math.min(nowMS, graceUntilMS))
         self.minigameScore = score
         if self.minigameCountStartMS then
             self.minigameCountTargetValue = score
         end
     end
 
-    if score > 0 and nowMS >= (self.minigameGraceUntilMS or nowMS) then
+    if nowMS >= graceUntilMS then
         if not self.minigameDrainStartMS then
-            self.minigameDrainStartMS = nowMS
+            self.minigameDrainStartMS = graceUntilMS
             self.minigameDrainStartValue = score
             self.minigameCountStartMS = nil
         end
@@ -1331,11 +1422,10 @@ function DamageNumbers:UpdateDamageDoneMinigame()
 
         if drainProgress >= 1 then
             self.minigameScore = 0
-            self.minigameDisplayScore = 0
-            self:ApplyMinigameText(0)
+            self.minigameDisplayScore = self.minigamePeak or 0
             self.minigameFinisher =
             {
-                startMS = nowMS,
+                startMS = graceUntilMS + MINIGAME_DRAIN_MS,
                 durationMS = MINIGAME_FINISH_MS,
             }
         end
@@ -1350,6 +1440,15 @@ function DamageNumbers:UpdateDamageDoneMinigame()
     elseif score > 0 then
         self.minigameDisplayScore = score
     end
+end
+
+function DamageNumbers:UpdateDamageDoneMinigame()
+    if not IsMinigameEnabled() then
+        self:ResetDamageDoneMinigame(true)
+        return
+    end
+    local nowMS = GetFrameTimeMilliseconds()
+    self:UpdateMinigameScore(nowMS)
 
     self:ApplyMinigameText(self.minigameDisplayScore or 0)
     self:UpdateMinigameVisuals(nowMS)
@@ -1357,6 +1456,11 @@ function DamageNumbers:UpdateDamageDoneMinigame()
     local root = self:GetMinigameRoot()
     root:SetHidden(false)
     if IsMinigameUnlocked() then
+        root:SetAlpha(0)
+    end
+    if not self.minigamePreviewing and (HUD_SCENE or HUD_UI_SCENE)
+        and not ((HUD_SCENE and HUD_SCENE:IsShowing()) or (HUD_UI_SCENE and HUD_UI_SCENE:IsShowing())) then
+        -- Keep the clock running while the HUD is covered by a menu.
         root:SetAlpha(0)
     end
 
@@ -1662,10 +1766,11 @@ function DamageNumbers:PreviewDamageDoneMinigame()
     local previewHits =
     {
         { delayMS = 0, value = 11800, isCrit = false },
-        { delayMS = 150, value = 6400, isCrit = false },
-        { delayMS = 310, value = 57200, isCrit = true },
-        { delayMS = 500, value = 34800, isCrit = false },
-        { delayMS = 690, value = 168600, isCrit = true },
+        { delayMS = 40, value = 6400, isCrit = false },
+        { delayMS = 520, value = 57200, isCrit = true },
+        { delayMS = 550, value = 1800, isCrit = false },
+        { delayMS = 1450, value = 34800, isCrit = false },
+        { delayMS = 2450, value = 168600, isCrit = true },
     }
 
     for _, hit in ipairs(previewHits) do

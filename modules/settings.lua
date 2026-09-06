@@ -410,6 +410,12 @@ local ACCOUNT_DEFAULTS =
                 soundEnabled = true,
                 faceRight = false,
                 displayMode = "damageDone",
+                graceMS = 1250,
+                animationIntensity = 80,
+                showTimer = true,
+                showModeLabel = true,
+                showHitCount = true,
+                showPeakLabel = true,
             },
         },
         killSound =
@@ -997,6 +1003,14 @@ function Settings:Initialize()
     self.account = ZO_SavedVars:NewAccountWide("NirnsteelUI_Account", SAVED_VARS_VERSION, nil, ACCOUNT_DEFAULTS, self.serverKey)
     MigrateKnownSettings(self.account, GetRawAccountWideSettings("NirnsteelUI_Account", "Default"), ACCOUNT_DEFAULTS)
     CopyDefaults(self.account, ACCOUNT_DEFAULTS)
+    -- Preserve the old combined preference once, then let each option vary.
+    local minigame = self.account.modules.damageNumbers.damageDoneMinigame
+    if minigame.showDetails ~= nil then
+        for _, key in ipairs({ "showTimer", "showModeLabel", "showHitCount", "showPeakLabel" }) do
+            minigame[key] = minigame.showDetails ~= false
+        end
+        minigame.showDetails = nil
+    end
     UpgradeDamageNumberDefaults(self.account)
     UpgradeExperienceTrackerDefaults(self.account)
     UpgradeResourceBarDefaults(self.account)
@@ -3174,7 +3188,7 @@ function Settings:RegisterAddonMenu()
                 },
                 {
                     type = "description",
-                    text = "Chain player and pet damage into a fast draining arcade score.",
+                    text = "Chain player and pet damage into a gold arcade score. Keep the timer alive, rescue a draining chain, and finish with your peak score.",
                 },
                 {
                     type = "checkbox",
@@ -3224,6 +3238,66 @@ function Settings:RegisterAddonMenu()
                 },
                 {
                     type = "slider",
+                    name = "Combo Grace Period (ms)",
+                    tooltip = "Time after the last hit before the score starts draining over 1.5 seconds. The default allows a normal one-second attack rhythm.",
+                    min = 500,
+                    max = 3000,
+                    step = 50,
+                    getFunc = function() return self:GetDamageDoneMinigame().graceMS end,
+                    setFunc = function(value) self:SetDamageDoneMinigameValue("graceMS", value) end,
+                    disabled = function() return not self:IsDamageDoneMinigameEnabled() end,
+                    default = ACCOUNT_DEFAULTS.modules.damageNumbers.damageDoneMinigame.graceMS,
+                },
+                {
+                    type = "slider",
+                    name = "Impact Animation Intensity",
+                    tooltip = "Adjust punch, recoil, echoes, sparks, and flashes. Zero keeps the score and timer with simple fades.",
+                    min = 0,
+                    max = 150,
+                    step = 5,
+                    getFunc = function() return self:GetDamageDoneMinigame().animationIntensity end,
+                    setFunc = function(value) self:SetDamageDoneMinigameValue("animationIntensity", value) end,
+                    disabled = function() return not self:IsDamageDoneMinigameEnabled() end,
+                    default = ACCOUNT_DEFAULTS.modules.damageNumbers.damageDoneMinigame.animationIntensity,
+                },
+                {
+                    type = "checkbox",
+                    name = "Show Combo Timer",
+                    tooltip = "Animate the underline to show remaining chain time. Turn off to keep a static underline.",
+                    getFunc = function() return self:GetDamageDoneMinigame().showTimer end,
+                    setFunc = function(value) self:SetDamageDoneMinigameValue("showTimer", value) end,
+                    disabled = function() return not self:IsDamageDoneMinigameEnabled() end,
+                    default = ACCOUNT_DEFAULTS.modules.damageNumbers.damageDoneMinigame.showTimer,
+                },
+                {
+                    type = "checkbox",
+                    name = "Show Damage Done / DPS Label",
+                    tooltip = "Show the Damage Done or DPS text beneath the score, independently of the hit count and peak label.",
+                    getFunc = function() return self:GetDamageDoneMinigame().showModeLabel end,
+                    setFunc = function(value) self:SetDamageDoneMinigameValue("showModeLabel", value) end,
+                    disabled = function() return not self:IsDamageDoneMinigameEnabled() end,
+                    default = ACCOUNT_DEFAULTS.modules.damageNumbers.damageDoneMinigame.showModeLabel,
+                },
+                {
+                    type = "checkbox",
+                    name = "Show Hit Count",
+                    tooltip = "Show the number of hits beneath the score, independently of the Damage Done or DPS label.",
+                    getFunc = function() return self:GetDamageDoneMinigame().showHitCount end,
+                    setFunc = function(value) self:SetDamageDoneMinigameValue("showHitCount", value) end,
+                    disabled = function() return not self:IsDamageDoneMinigameEnabled() end,
+                    default = ACCOUNT_DEFAULTS.modules.damageNumbers.damageDoneMinigame.showHitCount,
+                },
+                {
+                    type = "checkbox",
+                    name = "Show Peak Label",
+                    tooltip = "Show PEAK beneath the final score when a chain ends. This does not change the final score or the other labels.",
+                    getFunc = function() return self:GetDamageDoneMinigame().showPeakLabel end,
+                    setFunc = function(value) self:SetDamageDoneMinigameValue("showPeakLabel", value) end,
+                    disabled = function() return not self:IsDamageDoneMinigameEnabled() end,
+                    default = ACCOUNT_DEFAULTS.modules.damageNumbers.damageDoneMinigame.showPeakLabel,
+                },
+                {
+                    type = "slider",
                     name = "Minigame Scale",
                     min = 60,
                     max = 180,
@@ -3236,7 +3310,7 @@ function Settings:RegisterAddonMenu()
                 {
                     type = "button",
                     name = "Preview Minigame",
-                    tooltip = "Play a short normal-hit, pet-hit, critical-hit, and drain sequence.",
+                    tooltip = "Preview rapid hits, critical impacts, milestones, the draining timer, and the final peak score. Real damage starts a fresh chain.",
                     func = function() self:PreviewDamageDoneMinigame() end,
                     disabled = function() return not self:IsDamageDoneMinigameEnabled() end,
                 },
