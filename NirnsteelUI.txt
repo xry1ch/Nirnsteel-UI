@@ -19,6 +19,7 @@ modules/group_frames.lua
 modules/cast_bar.lua
 modules/synergy_alert.lua
 modules/compass.lua
+modules/minimap.lua
 modules/loot_history.lua
 modules/damage_numbers.lua
 modules/kill_sound.lua

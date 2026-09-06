@@ -21,6 +21,7 @@ local MODULE_MENU_ICONS =
     ["HARDCORE Support"] = "EsoUI/Art/Campaign/campaignbrowser_indexicon_hardcore_up.dds",
     ["Kill Sound"] = "EsoUI/Art/Options/Gamepad/gp_options_audio.dds",
     ["Loot History"] = "EsoUI/Art/AddOns/Gamepad/gp_mod_listing_category_bankandinventory.dds",
+    ["Minimap"] = "EsoUI/Art/AddOns/Gamepad/gp_mod_listing_category_mapandcompass.dds",
     ["Misc"] = "EsoUI/Art/AddOns/Gamepad/gp_mod_listing_category_uigraphics.dds",
     ["PvP"] = "EsoUI/Art/AddOns/Gamepad/gp_mod_listing_category_combat.dds",
     ["Resource Bars"] = "EsoUI/Art/AddOns/Gamepad/gp_mod_listing_category_uigraphics.dds",
@@ -362,6 +363,21 @@ local TARGET_FRAME_DEFAULTS =
     unknownClassColor = { r = 0.54, g = 0.59, b = 0.66 },
 }
 
+local MINIMAP_DEFAULTS =
+{
+    enabled = true, unlocked = false, shape = "circle", orientation = "north",
+    diameter = 280, width = 340, height = 240, questTrackerOffset = 0,
+    mapOpacity = 95, frameOpacity = 100, borderThickness = 2, shadow = true,
+    borderColor = { r = 0.64, g = 0.72, b = 0.77 },
+    accentColor = { r = 0.90, g = 0.74, b = 0.40 },
+    showLocation = true, showCardinals = true, showCoordinates = false,
+    zoom = 2.5, markerScale = 100, playerScale = 110,
+    combatBehavior = "show", combatOpacity = 40,
+    clickThrough = false, wheelZoom = true, tooltips = true,
+    showGroup = true, showQuests = true, showWayshrines = true,
+    showLocations = true, showWaypoint = true, waypointEdge = true, questMode = "tracked",
+}
+
 local ACCOUNT_DEFAULTS =
 {
     debugMode = false,
@@ -465,6 +481,7 @@ local ACCOUNT_DEFAULTS =
         {
             enabled = true,
         },
+        minimap = MINIMAP_DEFAULTS,
         experienceTracker =
         {
             enabled = true,
@@ -600,6 +617,7 @@ local SERVER_DEFAULTS =
                     x = 0,
                     y = 0,
                 },
+                minimap = { x = -32, y = -48 },
             },
         },
     },
@@ -1094,6 +1112,28 @@ end
 
 function Settings:GetCompass()
     return self.account.modules.compass
+end
+
+function Settings:GetMinimap()
+    return self.account.modules.minimap
+end
+
+function Settings:GetMinimapPosition()
+    return self.server.modules.minimap
+end
+
+function Settings:SetMinimapValue(key, value)
+    self:GetMinimap()[key] = value
+    if Nirnsteel_UI.Minimap then Nirnsteel_UI.Minimap:RefreshSettings() end
+end
+
+function Settings:ResetMinimapSettings()
+    local defaults = {}
+    CopyDefaults(defaults, MINIMAP_DEFAULTS)
+    self.account.modules.minimap = defaults
+    local position = self:GetMinimapPosition()
+    position.x, position.y = -32, -48
+    if Nirnsteel_UI.Minimap then Nirnsteel_UI.Minimap:RefreshSettings() end
 end
 
 function Settings:GetExperienceTracker()
@@ -2772,6 +2812,93 @@ function Settings:BuildTargetFrameOptions()
     Checkbox("Level Style", "showLevelStyle", "Add tier colors and special effects at CP 2000+. Turn it off for plain white level text.",
         function() return Disabled() or self:GetTargetFrame().showLevel == false end)
 
+    return controls
+end
+
+function Settings:BuildMinimapControls()
+    local controls = {}
+    local function Add(kind, name, key, extra)
+        local option = extra or {}
+        option.type, option.name = kind, name
+        option.getFunc = function() return self:GetMinimap()[key] end
+        option.setFunc = function(value) self:SetMinimapValue(key, value) end
+        option.default = MINIMAP_DEFAULTS[key]
+        if key ~= "enabled" then
+            local extraDisabled = option.disabled
+            option.disabled = function()
+                return not self:GetMinimap().enabled or (extraDisabled and extraDisabled())
+            end
+        end
+        controls[#controls + 1] = option
+    end
+    local function Header(name) controls[#controls + 1] = { type = "header", name = name } end
+    local function Slider(name, key, low, high, step, extra)
+        local option = extra or {}
+        option.min, option.max, option.step = low, high, step or 1
+        if step and step < 1 then option.decimals = 2 end
+        Add("slider", name, key, option)
+    end
+    Add("checkbox", "Enable Minimap", "enabled")
+    Add("checkbox", "Unlock Position", "unlocked", {
+        tooltip = "With the cursor visible, drag anywhere on the minimap or its header. Position is saved on this server. Waypoint clicks are disabled while unlocked.",
+    })
+    Slider("Quest Tracker Vertical Offset", "questTrackerOffset", 0, 600, 5, {
+        tooltip = "Move the native quest tracker down by this many UI pixels to make room for the minimap at the top right. Zero restores its normal position. The offset is removed while Minimap is disabled.",
+    })
+    Add("dropdown", "Shape", "shape", { choices = { "Circular", "Rectangular" }, choicesValues = { "circle", "rectangle" } })
+    Add("dropdown", "Orientation", "orientation", { choices = { "North Up", "Rotating (Camera Heading)" }, choicesValues = { "north", "rotating" } })
+    Header("Dimensions")
+    Slider("Circle Diameter", "diameter", 180, 500, 10, { disabled = function() return self:GetMinimap().shape ~= "circle" end })
+    Slider("Rectangle Width", "width", 220, 600, 10, { disabled = function() return self:GetMinimap().shape ~= "rectangle" end })
+    Slider("Rectangle Height", "height", 160, 500, 10, { disabled = function() return self:GetMinimap().shape ~= "rectangle" end })
+    Header("Appearance")
+    Slider("Map Opacity", "mapOpacity", 0, 100)
+    Slider("Frame Opacity", "frameOpacity", 0, 100)
+    Slider("Border Thickness", "borderThickness", 1, 6)
+    for _, entry in ipairs({ { "Border Color", "borderColor" }, { "Accent Color", "accentColor" } }) do
+        local name, key = entry[1], entry[2]
+        controls[#controls + 1] = {
+            type = "colorpicker", name = name,
+            getFunc = function() local c = self:GetMinimap()[key]; return c.r, c.g, c.b, 1 end,
+            setFunc = function(r, g, b) self:SetMinimapValue(key, { r = r, g = g, b = b }) end,
+            default = { r = MINIMAP_DEFAULTS[key].r, g = MINIMAP_DEFAULTS[key].g, b = MINIMAP_DEFAULTS[key].b, a = 1 },
+            disabled = function() return not self:GetMinimap().enabled end,
+        }
+    end
+    Add("checkbox", "Frame Shadow", "shadow")
+    Add("checkbox", "Location Name", "showLocation")
+    Add("checkbox", "Cardinal Directions", "showCardinals")
+    Add("checkbox", "Player Coordinates", "showCoordinates", { tooltip = "Show normalized map coordinates as percentages, not world distances." })
+    Header("Navigation")
+    Slider("Zoom", "zoom", 1, 8, 0.25)
+    Slider("Marker Scale", "markerScale", 75, 150, 5)
+    Slider("Player Arrow Scale", "playerScale", 75, 175, 5)
+    Add("checkbox", "Group Members", "showGroup")
+    Add("checkbox", "Quest Objectives", "showQuests")
+    Add("dropdown", "Quest Filter", "questMode", {
+        choices = { "Tracked Only", "All Journal Quests" }, choicesValues = { "tracked", "all" },
+        disabled = function() return not self:GetMinimap().showQuests end,
+    })
+    Add("checkbox", "Discovered Wayshrines", "showWayshrines")
+    Add("checkbox", "Locations", "showLocations")
+    Add("checkbox", "Personal Waypoint", "showWaypoint")
+    Add("checkbox", "Waypoint Edge Indicator", "waypointEdge", { disabled = function() return not self:GetMinimap().showWaypoint end })
+    Header("Visibility and Interaction")
+    Add("dropdown", "During Combat", "combatBehavior", { choices = { "Show", "Dim", "Hide" }, choicesValues = { "show", "dim", "hide" } })
+    Slider("Combat Dim Opacity", "combatOpacity", 0, 100, 1, { disabled = function() return self:GetMinimap().combatBehavior ~= "dim" end })
+    Add("checkbox", "Click Through", "clickThrough", { tooltip = "Make the map passive while locked. Unlock Position and Preview remain available here." })
+    Add("checkbox", "Mouse Wheel Zoom", "wheelZoom", { disabled = function() return self:GetMinimap().clickThrough end })
+    Add("checkbox", "Marker Tooltips", "tooltips", { disabled = function() return self:GetMinimap().clickThrough end })
+    controls[#controls + 1] = { type = "description", text = "With the cursor visible: Ctrl + left click places a waypoint; right click its marker to remove it. Hover the map for zoom and world-map buttons. Gamepad navigation uses the full world map." }
+    for _, entry in ipairs({ { "Preview", "Preview" }, { "Reset Position", "ResetPosition" } }) do
+        local name, method = entry[1], entry[2]
+        controls[#controls + 1] = {
+            type = "button", name = name,
+            func = function() if Nirnsteel_UI.Minimap then Nirnsteel_UI.Minimap[method](Nirnsteel_UI.Minimap) end end,
+            disabled = function() return not self:GetMinimap().enabled end,
+        }
+    end
+    controls[#controls + 1] = { type = "button", name = "Reset Minimap Settings", func = function() self:ResetMinimapSettings() end }
     return controls
 end
 
@@ -4991,6 +5118,7 @@ function Settings:RegisterAddonMenu()
             default = ACCOUNT_DEFAULTS.debugMode,
         },
     }
+    options[#options + 1] = { type = "submenu", name = "Minimap", controls = self:BuildMinimapControls() }
     options = ConfigureModuleMenuOptions(options)
 
     local noMouseWheelSlider = Nirnsteel_UI.NoMouseWheelSlider
@@ -5003,6 +5131,9 @@ function Settings:RegisterAddonMenu()
     for _, eventName in ipairs({ "LAM-PanelOpened", "LAM-PanelClosed" }) do
         local visible = eventName == "LAM-PanelOpened"
         CALLBACK_MANAGER:RegisterCallback(eventName, function(panel)
+            if panel and panel:GetName() == panelName and Nirnsteel_UI.Minimap then
+                Nirnsteel_UI.Minimap:SetSettingsPanelVisible(visible)
+            end
             if panel and panel:GetName() == panelName and Nirnsteel_UI.SynergyAlert then
                 Nirnsteel_UI.SynergyAlert:SetSettingsPanelVisible(visible)
             end

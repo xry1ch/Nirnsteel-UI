@@ -1,5 +1,26 @@
 # NirnsteelUI
 
+## Minimap
+
+**Settings → Addons → NirnSteel UI → Minimap** provides a player-centered navigation map with a dark steel frame, silver edging, and gold compass accents. It starts enabled as a 280-pixel circle at the bottom right, facing north, and stays visible in combat. It requires no additional libraries beyond the addon's existing LibAddonMenu dependency.
+
+- Switch between circular and rectangular views without losing either shape's dimensions. Choose north-up or smooth camera-heading rotation; markers stay upright.
+- Adjust zoom, dimensions, map/frame opacity, frame colors and thickness, marker/player size, labels, shadow, and combat visibility. Filter group members, quests, discovered wayshrines, locations, and the personal waypoint independently. Quest markers include native search areas and floor/door breadcrumbs.
+- With ESO's cursor visible, hover for zoom and world-map buttons. **Ctrl + left click** places a personal waypoint; **right click its marker** removes it. Wheel zoom changes in 0.25× steps. Click-through is optional. Gamepad HUD display is supported; use the full map for controller waypoint placement.
+- **Unlock Position** enables dragging anywhere on the map or its header while the cursor is visible, including with click-through enabled. The complete widget stays on screen and its position is saved on release. Unlocking also opens a persistent sample preview while this addon's settings panel is open. **Preview** otherwise lasts 12 seconds. Sample markers cannot create real waypoints. **Reset Position** restores the bottom-right placement; **Reset Minimap Settings** resets only this module.
+- **Quest Tracker Vertical Offset** moves the native quest tracker down by 0–600 UI pixels to leave room for a minimap at the top right. It applies immediately, preserves ESO's relative layout, and is saved with the Minimap settings. Zero, module reset, or disabling Minimap restores normal tracker placement; re-enabling restores the saved offset.
+- The minimap suspends during menus, full-map browsing, travel, and loading. It never selects the player map while those scenes own the map. Invalid player positions or missing map tiles display an unavailable state and retry. Custom pins from other addons and dedicated siege overlays are outside this version.
+
+Run `tests/minimap_regression.lua` from the addon root with Lua 5.1+ or Fengari. Coverage includes rendered tile/marker alignment through full rotations, clicks on rotated terrain, fixed clipping after moves/resizes, non-square tiles, compass/waypoint arrow bounds, filters, delayed quest data, map ownership, floor changes, scene/combat transitions, preview isolation, settings persistence, and cleanup. `tests/minimap_preview.cjs` captures the real Lua controls and their clipping coordinates for a four-layout diagnostic image using sample terrain; its invocation is documented at the top of that file. Terrain uses native texture rotation and compass arrows rotate their polygon vertices, leaving control and clipping coordinates fixed. The player marker is a standalone arrow without a background ring.
+
+Rectangular frames, compass ticks, and arrow tips use unsmoothed polygon edges so the native renderer preserves their corners. Regression coverage checks frame alignment and shape switching at tall, default, and wide dimensions in both orientations; the diagnostic renderer rejects smoothed sparse contours rather than displaying a misleading straight outline.
+
+`tests/minimap_layout_regression.lua` covers drag hit routing over terrain and headers, clipping during movement, screen clamping, position persistence, cancellation on scene/cursor/setting changes, and the quest tracker slider's native anchors, reset, saved defaults, and platform changes.
+
+Validation for this change: Lua 5.1 syntax checks and ten regression suites passed, including both minimap suites. The existing `target_frame_regression.lua` readiness-event assertion at line 625 still fails; both that test and `modules/target_frame.lua` are unchanged from the baseline. Live ESO checks remain unverified because computer-use access to the client was denied. In-client acceptance should check dragging from both the map and header, quest tracker placement in keyboard/gamepad mode, rectangular frame corners against terrain edges, actual tile clipping/seams and heading direction in both shapes, zone/interior/floor transitions, group markers, cursor behavior, UI scaling, and repeated world-map opening.
+
+## Damage Done Minigame
+
 The **Damage Done Minigame** is available under **Damage Numbers** in the addon settings. Enable it, then use **Preview Minigame** to try a sequence of rapid hits, critical impacts, milestones, and the final peak score. It works independently of floating damage numbers.
 
 - Player and pet damage, including damage-over-time ticks, build the chain. Nearby hits share a floating delta; every hit still counts toward the score.
