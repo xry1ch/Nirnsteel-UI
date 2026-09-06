@@ -248,10 +248,11 @@ CheckArtworkSafety(alert.live)
 expect(alert.live.glow.layer == DL_BACKGROUND and alert.live.icon.layer == DL_ARTWORK
     and alert.live.icon.color[1] == 1 and alert.live.icon.color[4] == 1,
     "the unmodified ability artwork must render above the additive glow")
-for _, strip in ipairs(alert.live.border) do
-    expect(math.abs(strip.anchor[4]) - strip.width * 0.5 >= 56
-        or math.abs(strip.anchor[5]) - strip.height * 0.5 >= 56,
-        "border strips must stay outside the entire icon")
+for _, view in ipairs({ alert.live, alert.preview }) do
+    expect(view.border.texture == "EsoUI/Art/ActionBar/actionslot_normal.dds"
+        and view.border.anchorFill == view.hero and view.border.layer == view.icon.layer
+        and view.border.drawLevel > view.icon.drawLevel,
+        "live and preview must overlay the ability slot frame on the synergy icon")
 end
 expect(alert.live.details.anchor[5] > 72 + 56,
     "the action row must remain below the icon")

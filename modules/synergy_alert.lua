@@ -6,6 +6,7 @@ local SynergyAlert = {}
 Nirnsteel_UI.SynergyAlert = SynergyAlert
 
 local GLOW_TEXTURE = "EsoUI/Art/HUD/Gamepad/gp_skillGlow.dds"
+local BORDER_TEXTURE = "EsoUI/Art/ActionBar/actionslot_normal.dds"
 local ICON_SIZE = 112
 local EMBLEM_SIZE = 144
 local DETAILS_Y = 148
@@ -31,20 +32,15 @@ local function GetDefaultOffset()
         or ZO_COMMON_INFO_DEFAULT_KEYBOARD_BOTTOM_OFFSET_Y
 end
 
--- Border strips sit outside the artwork; no filled shape can obscure the icon.
+-- Reuse the ability slots' textured frame above the synergy artwork.
 local function CreateIconBorder(parent)
-    local strips = {}
-    local edge = ICON_SIZE * 0.5 + 2
-    for _, rect in ipairs({ { -edge, 0, 2, ICON_SIZE + 6 }, { edge, 0, 2, ICON_SIZE + 6 },
-        { 0, -edge, ICON_SIZE + 6, 2 }, { 0, edge, ICON_SIZE + 6, 2 } }) do
-        local strip = WINDOW_MANAGER:CreateControl(nil, parent, CT_TEXTURE)
-        strip:SetDimensions(rect[3], rect[4])
-        strip:SetAnchor(CENTER, parent, CENTER, rect[1], rect[2])
-        strip:SetColor(0.72, 0.88, 1, 0.9)
-        strip:SetDrawLayer(DL_ARTWORK)
-        strips[#strips + 1] = strip
-    end
-    return strips
+    local border = WINDOW_MANAGER:CreateControl(nil, parent, CT_TEXTURE)
+    border:SetAnchorFill(parent)
+    border:SetTexture(BORDER_TEXTURE)
+    border:SetColor(1, 1, 1, 1)
+    border:SetDrawLayer(DL_ARTWORK)
+    border:SetDrawLevel(2)
+    return border
 end
 
 function SynergyAlert:StopAnimation(view)
