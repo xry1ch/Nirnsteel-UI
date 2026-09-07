@@ -784,7 +784,12 @@ function Minimap:HandleClick(button)
 end
 
 function Minimap:ChangeZoom(delta)
-    Nirnsteel_UI.Settings:SetMinimapValue("zoom", Clamp(Settings().zoom + (delta > 0 and 0.25 or -0.25), 1, 12))
+    local previousZoom = Settings().zoom
+    local zoom = Clamp(previousZoom + (delta > 0 and 0.25 or -0.25), 1, 12)
+    if zoom == previousZoom then return end
+    Nirnsteel_UI.Settings:SetMinimapValue("zoom", zoom)
+    local sound = SOUNDS and (zoom > previousZoom and SOUNDS.MAP_ZOOM_IN or SOUNDS.MAP_ZOOM_OUT)
+    if sound then PlaySound(sound) end
 end
 
 function Minimap:ClearHover()
