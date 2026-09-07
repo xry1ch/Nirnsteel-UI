@@ -45,7 +45,7 @@ for _, shape in ipairs({"circle", "rectangle"}) do
                 scene[#scene + 1] = {
                     id = c.id, kind = c.kind, left = c:GetLeft() - M.root:GetLeft(), top = c:GetTop() - M.root:GetTop(),
                     w = c:GetWidth(), h = c:GetHeight(), alpha = alpha, rotation = c.rotation,
-                    textureRotation = c.textureRotation or 0, textureOrigin = c.textureOrigin,
+                    textureRotation = c.textureRotation or 0, textureOrigin = c.textureOrigin, shaderEffectType = c.shaderEffectType,
                     points = c.points, smoothing = c.smoothing, fill = c.fillColor,
                     border = c.border, borderColor = c.borderColor, color = c.color,
                     text = c.text, font = c.font, texture = c.texture, level = c.level or 0, tier = c.tier, layer = c.layer,
@@ -99,6 +99,9 @@ function render(snapshot, idx) {
             }
             const points = c.points.map(p => `${c.left + p[0] * c.w},${c.top + p[1] * c.h}`).join(' ');
             body = `<polygon points="${points}" fill="${rgb(c.fill)}" fill-opacity="${opacity(c.fill)}" stroke="${c.border ? rgb(c.borderColor) : 'none'}" stroke-opacity="${opacity(c.borderColor)}" stroke-width="${c.border || 0}"/>`;
+        } else if (c.kind === 'CT_TEXTURE' && c.shaderEffectType === 'SHADER_EFFECT_TYPE_HALO') {
+            // Approximate the native shader for geometry diagnostics only.
+            body = `<ellipse cx="${cx}" cy="${cy}" rx="${c.w / 2}" ry="${c.h / 2}" fill="${rgb(c.color)}" fill-opacity="0.35" stroke="${rgb(c.color)}" stroke-width="1.5"/>`;
         } else if (c.kind === 'CT_TEXTURE' && c.texture) {
             const pivotX = c.left + (c.textureOrigin?.[0] ?? 0.5) * c.w;
             const pivotY = c.top + (c.textureOrigin?.[1] ?? 0.5) * c.h;

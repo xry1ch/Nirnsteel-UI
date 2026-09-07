@@ -10,7 +10,7 @@ local H = {
 unpack = unpack or table.unpack
 math.atan2 = math.atan2 or function(y, x) return math.atan(y, x) end
 for _, name in ipairs({ "TOPLEFT", "TOPRIGHT", "BOTTOMLEFT", "BOTTOMRIGHT", "TOP", "BOTTOM", "LEFT", "RIGHT", "CENTER",
-    "CT_CONTROL", "CT_POLYGON", "CT_TEXTURE", "CT_LABEL", "CT_BACKDROP", "DL_BACKGROUND", "DL_CONTROLS", "DL_OVERLAY", "DL_TEXT", "DT_LOW", "DT_MEDIUM", "DT_HIGH",
+    "CT_CONTROL", "CT_POLYGON", "CT_TEXTURE", "CT_LABEL", "CT_BACKDROP", "SHADER_EFFECT_TYPE_HALO", "DL_BACKGROUND", "DL_CONTROLS", "DL_OVERLAY", "DL_TEXT", "DT_LOW", "DT_MEDIUM", "DT_HIGH",
     "TEXT_ALIGN_CENTER", "POLYGON_POINT_LAYOUT_CLOCKWISE", "POLYGON_BORDER_DIRECTION_IN",
     "MAP_PIN_TYPE_PLAYER_WAYPOINT", "MAP_TYPE_LOCATION_CENTERED", "SET_MAP_RESULT_MAP_CHANGED", "SET_MAP_RESULT_CURRENT_MAP_UNCHANGED",
     "POI_TYPE_WAYSHRINE", "POI_TYPE_OBJECTIVE", "MAP_CONTENT_DUNGEON", "MAP_CONTENT_NONE", "TRACK_TYPE_QUEST",
@@ -93,6 +93,7 @@ local function NewControl(parent, kind)
     function c:SetBorderColor(...) self.borderColor = {...} end
     function c:SetCenterColor(...) self.fillColor = {...} end
     function c:SetTexture(v) self.texture = v end
+    function c:SetShaderEffectType(v) self.shaderEffectType = v end
     function c:SetColor(...) self.color = {...} end
     function c:SetFont(v) self.font = v end
     function c:SetText(v) self.text = v end

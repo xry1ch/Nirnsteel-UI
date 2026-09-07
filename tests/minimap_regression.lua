@@ -139,7 +139,8 @@ expect(H.removedWaypoints == 1, "right click removes only the hit personal waypo
 H:Mouse(80, 60); M:HandleClick(MOUSE_BUTTON_INDEX_RIGHT)
 expect(H.removedWaypoints == 1, "empty terrain cannot clear waypoint")
 config("orientation", "north"); H.x, H.y = 0.02, 0.02; H:Tick(); H:Mouse(-80, -80); H.ctrl = true
-M:PlaceWaypointAtCursor(); expect(#H.pings == 1, "reject projected coordinates outside map bounds")
+M:PlaceWaypointAtCursor(); expect(#H.pings == 2, "border clicks use the clamped map center")
+expect(H.pings[2][3] >= 0 and H.pings[2][4] >= 0, "border waypoint remains inside map")
 H.x, H.y, H.ctrl = 0.5, 0.5, false; H:Tick()
 H.waypointX, H.waypointY = 0.98, 0.5; H:Tick()
 expect(not M.waypointArrow.hidden and M:Contains(select(1, M.waypointArrow:GetCenter()) - select(1, M.viewport:GetCenter()), 0), "waypoint clamps inside circle")
@@ -209,7 +210,9 @@ H.cursor = true; H:Tick(); local zoom = S:GetMinimap().zoom
 M.input.handlers.OnMouseWheel(nil, 1); expect(near(S:GetMinimap().zoom, zoom + 0.25), "wheel zoom increment")
 config("wheelZoom", false); zoom = S:GetMinimap().zoom; M.input.handlers.OnMouseWheel(nil, 1)
 expect(S:GetMinimap().zoom == zoom, "wheel zoom can be disabled")
-config("zoom", 1000); expect(S:GetMinimap().zoom == 8, "out-of-range settings clamped")
+config("zoom", 1000); expect(S:GetMinimap().zoom == 12, "out-of-range settings clamped")
+M:ChangeZoom(1); expect(S:GetMinimap().zoom == 12, "zoom controls respect upper limit")
+M:ChangeZoom(-1); expect(S:GetMinimap().zoom == 11.75, "zoom controls step down from expanded limit")
 config("zoom", 0 / 0); expect(S:GetMinimap().zoom == 2.5, "non-finite settings use default")
 
 H:SetScene("gameMenu"); M:SetSettingsPanelVisible(true)
@@ -293,9 +296,9 @@ for _, shape in ipairs({ "circle", "rectangle" }) do
             M:Render(1)
             local cx, cy = M.viewport:GetCenter()
             local px, py = terrainPoint(H.x, H.y)
-            expect(near(px, cx, 0.36) and near(py, cy, 0.36), "terrain beneath player stays centered at every heading and zoom")
             local arrowX, arrowY = M.player:GetCenter()
-            expect(near(arrowX, cx) and near(arrowY, cy) and near(M.player.textureRotation, 0), "player stays centered and faces up after camera rotation settles")
+            expect(near(px, arrowX, 0.36) and near(py, arrowY, 0.36), "terrain stays aligned with player at every heading and zoom")
+            expect(near(M.player.textureRotation, 0), "player faces up after camera rotation settles")
             for i = 1, M.tileCount do fixedClip(M.tilePool[i]) end
             fixedClip(M.waypointArrow)
             for i = 1, M.activePinCount do
@@ -345,13 +348,14 @@ expect(near(eastX, cx, 0.36) and eastY > cy, "positive camera heading turns east
 local northX, northY = terrainPoint(0.5, 0.45)
 expect(northX > cx and near(northY, cy, 0.36), "positive camera heading turns northern terrain right")
 -- Interior maps can have non-square tiles; approaching their boundary must
--- still rotate around the player and leave uncovered terrain clipped.
+-- keep terrain aligned with the player after the view stops at map edges.
 H.tileColumns, H.tileRows = 2, 3; expect(M:LoadTiles(H.map), "non-square tile grid loads")
 H.x, H.y = 0.02, 0.98
 for _, heading in ipairs({0, 0.7, math.pi, math.pi * 1.7}) do
     H.heading, M.angle = heading, nil; M:Render(1)
     local px, py = terrainPoint(H.x, H.y)
-    expect(near(px, cx, 0.36) and near(py, cy, 0.36), "non-square tiles stay centered near map edges")
+    local arrowX, arrowY = M.player:GetCenter()
+    expect(near(px, arrowX, 0.36) and near(py, arrowY, 0.36), "non-square tiles stay aligned with the player near map edges")
     for i = 1, M.tileCount do fixedClip(M.tilePool[i]) end
 end
 config("orientation", "north")
