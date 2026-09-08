@@ -51,3 +51,7 @@ Use **Preview All Tiers** to demonstrate the selected mode's complete progressio
 Upper-tier milestones unfold the armor and expand the crest in a dedicated transformation. Earned metalwork persists until the chain ends, even during drain. Zero animation intensity preserves the tier's static design while disabling movement and flashes.
 
 **Tier Progression Sounds** is on by default and gives each newly reached tier its own sound in both modes. A hit that skips tiers plays only the highest tier reached. Disable it to keep regular hit sounds, or turn off **Minigame Sounds** to mute all minigame audio. **Preview All Tiers** demonstrates the sound progression as well as the visuals.
+
+## Immersive Teleport
+
+Enable **Misc > Immersive Teleport** to hide the UI and use the character panel camera during recall animations, with VestigeMirror's Left Composition framing. The setting is account wide and off by default. Travel completion, failure, interruption, movement, blocking, death, or disabling the setting restores the UI and releases the camera. Opening a menu also ends the effect. A timeout provides cleanup if an end event is missed.

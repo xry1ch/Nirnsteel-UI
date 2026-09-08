@@ -1117,11 +1117,33 @@ function GroupFrames:RefreshAllUnitStates()
     end
 end
 
+local STOCK_FRAME_TABLES = { "groupFrames", "raidFrames", "companionRaidFrames" }
+
+function GroupFrames:ApplyStockFrameHideReason(manager, hidden)
+    for _, key in ipairs(STOCK_FRAME_TABLES) do
+        for _, frame in pairs(manager[key] or {}) do
+            frame:SetHiddenForReason(STOCK_HIDE_REASON, hidden)
+        end
+    end
+end
+
 function GroupFrames:SetStockFramesHidden(hidden)
     hidden = hidden == true
     if UNIT_FRAMES and UNIT_FRAMES.SetGroupAndRaidFramesHiddenForReason then
+        -- The fragment's visibility can change independently of individual frames.
+        -- Keep a reason on every cached variant, including inactive raid frames.
+        if self.stockHookManager ~= UNIT_FRAMES and ZO_PostHook and UNIT_FRAMES.CreateFrame then
+            local manager = UNIT_FRAMES
+            ZO_PostHook(manager, "CreateFrame", function()
+                if self.stockFramesHidden and IsEnabled() then
+                    self:ApplyStockFrameHideReason(manager, true)
+                end
+            end)
+            self.stockHookManager = manager
+        end
         UNIT_FRAMES:SetGroupAndRaidFramesHiddenForReason(STOCK_HIDE_REASON, hidden)
         self.stockFramesHidden = hidden
+        self:ApplyStockFrameHideReason(UNIT_FRAMES, hidden)
     elseif not hidden then
         self.stockFramesHidden = false
     end

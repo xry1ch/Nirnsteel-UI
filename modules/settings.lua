@@ -394,6 +394,7 @@ local ACCOUNT_DEFAULTS =
         lootHistory =
         {
             enabled = true,
+            legacyStyle = false,
             unlocked = false,
             scale = 100,
             soundsEnabled = true,
@@ -455,6 +456,10 @@ local ACCOUNT_DEFAULTS =
             enabled = true,
             skillUseShrinkEnabled = true,
             globalCooldownEnabled = true,
+        },
+        immersiveTeleport =
+        {
+            enabled = false,
         },
         adventureCamera =
         {
@@ -1240,7 +1245,7 @@ function Settings:SetLootHistoryValue(key, value)
     end
 
     self:GetLootHistory()[key] = value
-    if key == "scale" and Nirnsteel_UI.LootHistory then
+    if (key == "scale" or key == "legacyStyle") and Nirnsteel_UI.LootHistory then
         Nirnsteel_UI.LootHistory:RefreshSettings()
     end
 end
@@ -1652,6 +1657,17 @@ function Settings:SetActionBarGlobalCooldownEnabled(value)
     self:GetActionBarFrames().globalCooldownEnabled = value
     if Nirnsteel_UI.ActionBarFrames then
         Nirnsteel_UI.ActionBarFrames:RefreshSettings()
+    end
+end
+
+function Settings:IsImmersiveTeleportEnabled()
+    return self.account.modules.immersiveTeleport.enabled
+end
+
+function Settings:SetImmersiveTeleportEnabled(value)
+    self.account.modules.immersiveTeleport.enabled = value
+    if Nirnsteel_UI.ImmersiveTeleport then
+        Nirnsteel_UI.ImmersiveTeleport:RefreshSettings()
     end
 end
 
@@ -2939,6 +2955,14 @@ function Settings:RegisterAddonMenu()
             name = "Misc",
             controls =
             {
+                {
+                    type = "checkbox",
+                    name = "Immersive Teleport",
+                    tooltip = "Hide the UI and use the character panel camera with Left Composition during teleport animations. Restore the normal camera and UI when travel completes or is canceled.",
+                    getFunc = function() return self:IsImmersiveTeleportEnabled() end,
+                    setFunc = function(value) self:SetImmersiveTeleportEnabled(value) end,
+                    default = ACCOUNT_DEFAULTS.modules.immersiveTeleport.enabled,
+                },
                 { type = "header", name = "Synergy Alert" },
                 {
                     type = "checkbox",
@@ -3023,6 +3047,15 @@ function Settings:RegisterAddonMenu()
                     getFunc = function() return self:IsLootHistoryEnabled() end,
                     setFunc = function(value) self:SetLootHistoryEnabled(value) end,
                     default = ACCOUNT_DEFAULTS.modules.lootHistory.enabled,
+                },
+                {
+                    type = "checkbox",
+                    name = "Legacy Style",
+                    tooltip = "Use Nirnsteel's original loot history appearance, before the ornamental shield design. Applies to new loot entries.",
+                    getFunc = function() return self:GetLootHistory().legacyStyle == true end,
+                    setFunc = function(value) self:SetLootHistoryValue("legacyStyle", value) end,
+                    disabled = function() return not self:IsLootHistoryEnabled() end,
+                    default = ACCOUNT_DEFAULTS.modules.lootHistory.legacyStyle,
                 },
                 {
                     type = "checkbox",

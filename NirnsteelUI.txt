@@ -13,6 +13,7 @@ modules/bar_visuals.lua
 modules/level_visuals.lua
 modules/target_frame.lua
 modules/adventure_camera.lua
+modules/immersive_teleport.lua
 modules/experience_tracker.lua
 modules/resource_bars.lua
 modules/group_frames.lua
