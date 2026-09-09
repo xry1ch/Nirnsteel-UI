@@ -240,6 +240,8 @@ local GROUP_FRAMES_DEFAULTS =
     healthTextPosition = "left",
     showClassIcon = true,
     showRoleIcon = true,
+    classIconSize = 16,
+    roleIconSize = 16,
     showLeaderIcon = true,
     showShields = true,
     showDeathAnimation = true,
@@ -247,6 +249,7 @@ local GROUP_FRAMES_DEFAULTS =
     showGuildIcon = false,
     showLevel = true,
     showLevelStyle = true,
+    levelTextSize = 13,
     showRecoveryRhythm = false,
     glossEnabled = true,
     patternEnabled = true,
@@ -371,6 +374,7 @@ local MINIMAP_DEFAULTS =
     borderColor = { r = 0.64, g = 0.72, b = 0.77 },
     accentColor = { r = 0.90, g = 0.74, b = 0.40 },
     showLocation = true, showCardinals = true, showCoordinates = false,
+    zoneTextSize = 14,
     zoom = 2.5, markerScale = 100, playerScale = 110,
     combatBehavior = "show", combatOpacity = 40,
     clickThrough = false, wheelZoom = true, tooltips = true,
@@ -2465,6 +2469,8 @@ function Settings:BuildGroupFramesOptions()
     Header("Identity & Status Icons")
     Checkbox("Show Class Icon", "showClassIcon", nil)
     Checkbox("Show Role Icon", "showRoleIcon", "Show each player's chosen group role. It may not match their current build.")
+    Slider("Class Icon Size", "classIconSize", "Set the class icon size in pixels.", 10, 28, 1)
+    Slider("Role Icon Size", "roleIconSize", "Set the role icon size in pixels.", 10, 28, 1)
     Checkbox("Show Group Leader Icon", "showLeaderIcon", nil)
     Checkbox("Show Friend Icon", "showFriendIcon", nil)
     Checkbox("Show Shared Guild Icon", "showGuildIcon", nil)
@@ -2567,7 +2573,9 @@ function Settings:BuildGroupFramesOptions()
 
     Header("Level Text")
     Checkbox("Show Level", "showLevel", "Show each character's level or earned Champion Points.")
-    Checkbox("Level Style", "showLevelStyle", "Add tier colors and special effects at CP 2000+. Turn it off for plain white level text.",
+    Slider("Level Text Size", "levelTextSize", "Set the level and Champion Point text size in pixels.", 10, 17, 1,
+        function() return Disabled() or self:GetGroupFrames().showLevel == false end)
+    Checkbox("Level Style", "showLevelStyle", "Add tier colors and special effects at CP 1800+. Turn it off for plain white level text.",
         function() return Disabled() or self:GetGroupFrames().showLevel == false end)
 
     return controls
@@ -2825,7 +2833,7 @@ function Settings:BuildTargetFrameOptions()
 
     Header("Level Text")
     Checkbox("Show Level", "showLevel", "Show the target's level or effective Champion Points.")
-    Checkbox("Level Style", "showLevelStyle", "Add tier colors and special effects at CP 2000+. Turn it off for plain white level text.",
+    Checkbox("Level Style", "showLevelStyle", "Add tier colors and special effects at CP 1800+. Turn it off for plain white level text.",
         function() return Disabled() or self:GetTargetFrame().showLevel == false end)
 
     return controls
@@ -2883,6 +2891,9 @@ function Settings:BuildMinimapControls()
     end
     Add("checkbox", "Frame Shadow", "shadow")
     Add("checkbox", "Location Name", "showLocation")
+    Slider("Zone Text Size", "zoneTextSize", 10, 32, 1, {
+        tooltip = "Set the minimap zone name text size in pixels.",
+    })
     Add("checkbox", "Cardinal Directions", "showCardinals")
     Add("checkbox", "Player Coordinates", "showCoordinates", { tooltip = "Show normalized map coordinates as percentages, not world distances." })
     Header("Navigation")
@@ -3263,7 +3274,7 @@ function Settings:RegisterAddonMenu()
                 {
                     type = "slider",
                     name = "Critical Font Size",
-                    min = 48,
+                    min = 24,
                     max = 128,
                     step = 1,
                     getFunc = function() return self:GetDamageNumbers().critFontSize end,

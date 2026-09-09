@@ -65,6 +65,11 @@ local function NewControl(controlType)
 
     function control:SetHidden(hidden)
         self.hidden = hidden == true
+        if self.hidden and self.OnHide then self.OnHide() end
+    end
+
+    function control:SetHandler(event, handler)
+        self[event] = handler
     end
 
     function control:IsHidden()
@@ -286,5 +291,92 @@ local measuredOrdinaryWidth = LevelVisuals:Apply(ordinaryBadge,
 expect(measuredOrdinaryWidth == 42,
     "ordinary measured width must remain text width plus horizontal padding")
 expect(ordinaryBadge.championIcon.hidden == true, "Champion icon must remain hidden when disabled")
+
+ANIMATION_TRANSLATE = 1
+ANIMATION_ALPHA = 2
+ANIMATION_PLAYBACK_ONE_SHOT = 1
+ANIMATION_MANAGER = {}
+function ANIMATION_MANAGER:CreateTimeline()
+    local timeline = { animations = {}, plays = 0 }
+    function timeline:InsertAnimation(kind, control, offset)
+        local animation = { kind = kind, control = control, offset = offset }
+        function animation:SetDuration(value) self.duration = value end
+        function animation:SetAlphaValues(first, last) self.first = first; self.last = last end
+        function animation:SetTranslateOffsets(...) self.translation = { ... } end
+        function animation:SetEasingFunction(value) self.easing = value end
+        self.animations[#self.animations + 1] = animation
+        return animation
+    end
+    function timeline:SetHandler(event, handler) self[event] = handler end
+    function timeline:SetPlaybackType(value) self.playback = value end
+    function timeline:PlayFromStart() self.plays = self.plays + 1 end
+    function timeline:Stop() self:OnStop() end
+    return timeline
+end
+
+local cases = {
+    { 0, "FFFFFF", 0 }, { 599, "FFFFFF", 0 },
+    { 600, "00FF00", 0 }, { 1199, "00FF00", 0 },
+    { 1200, "4040FF", 0 }, { 1799, "4040FF", 0 },
+    { 1800, "A020F0", 0.30 }, { 2399, "A020F0", 0.30 },
+    { 2400, "FFFF00", 0.50 }, { 2999, "FFFF00", 0.50 },
+    { 3000, "FFA500", 0.70 }, { 3599, "FFA500", 0.70 },
+    { 3600, "FFA500", 0.70 }, { 4000, "FFA500", 0.70 },
+}
+for _, case in ipairs(cases) do
+    local cp, hex, intensity = case[1], case[2], case[3]
+    LevelVisuals:Apply(compactBadge, { champion = true, championPoints = cp })
+    for color in compactBadge.label.text:gmatch("|c(%x%x%x%x%x%x)") do
+        expect(color == hex, "all digits must retain bracket color at CP " .. cp)
+    end
+    expect(compactBadge.shimmerIntensity == intensity, "wrong shimmer strength at CP " .. cp)
+    LevelVisuals:Play(compactBadge)
+    if intensity > 0 then
+        local timeline = compactBadge.timeline
+        local sweeps, finish = 0, 0
+        for _, animation in ipairs(timeline.animations) do
+            if animation.kind == ANIMATION_TRANSLATE and animation.control == compactBadge.clip then
+                sweeps = sweeps + 1
+                expect(animation.duration == 720, "sweeps must last 720 ms")
+                expect(animation.offset == (sweeps == 1 and 0 or 900), "incorrect sweep delay")
+            end
+            if animation.control == compactBadge.glow and animation.offset >= 1620 then
+                finish = finish + animation.duration
+            end
+        end
+        expect(sweeps == (cp >= 3000 and 2 or 1), "incorrect sweep count")
+        expect(finish == (cp >= 3600 and 600 or 0), "incorrect cap finishing pulse")
+        LevelVisuals:Play(compactBadge)
+        expect(timeline.plays == 1, "active animations must not overlap")
+        timeline:Stop()
+        expect(not compactBadge.playing and compactBadge.clip.hidden and compactBadge.glow.hidden,
+            "completion must clear effects")
+    else
+        expect(not compactBadge.playing, "lower brackets must not animate")
+    end
+end
+
+LevelVisuals:Apply(compactBadge, { champion = true, championPoints = 3600 })
+LevelVisuals:Play(compactBadge)
+local oldTimeline = compactBadge.timeline
+LevelVisuals:Apply(compactBadge, { champion = true, championPoints = 1800 })
+expect(not compactBadge.playing and compactBadge.timeline == nil, "tier changes must discard active timelines")
+LevelVisuals:Play(compactBadge)
+expect(compactBadge.timeline ~= oldTimeline, "new tiers must rebuild their animation")
+compactBadge.control:SetHidden(true)
+expect(not compactBadge.playing and compactBadge.glow.hidden, "hiding must stop playback")
+LevelVisuals:Apply(compactBadge, { champion = true, championPoints = 3600 })
+LevelVisuals:Play(compactBadge)
+LevelVisuals:Apply(compactBadge, { champion = true, championPoints = 3600 }, { styled = false })
+expect(compactBadge.label.text == "3600" and compactBadge.shimmerIntensity == 0
+    and not compactBadge.playing, "disabling styling must restore plain text and stop effects")
+LevelVisuals:Apply(compactBadge, { champion = true, championPoints = 3600 }, { shown = false })
+expect(compactBadge.control.hidden and compactBadge.clip.hidden, "hidden badges must clear effects")
+expect(compactBadge.glow.parent == compactBadge.control and compactBadge.glow.font == compactBadge.label.font,
+    "glow must remain aligned with stationary digits")
+LevelVisuals:Apply(compactBadge, { champion = true, championPoints = 3600 })
+expect(compactBadge.glow.text ~= compactBadge.label.text,
+    "the finishing glow must brighten the base digits")
+expect(LevelVisuals.SHIMMER_CADENCE_MS == 4200, "repeat cadence must remain 4.2 seconds")
 
 print("level_visuals_regression.lua: all checks passed")

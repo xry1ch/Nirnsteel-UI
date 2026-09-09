@@ -39,6 +39,8 @@ local DEFAULT_SETTINGS =
     healthTextPosition = "left",
     showClassIcon = true,
     showRoleIcon = true,
+    classIconSize = 16,
+    roleIconSize = 16,
     showLeaderIcon = true,
     showShields = true,
     showDeathAnimation = true,
@@ -46,6 +48,7 @@ local DEFAULT_SETTINGS =
     showGuildIcon = false,
     showLevel = true,
     showLevelStyle = true,
+    levelTextSize = 13,
     showRecoveryRhythm = false,
     glossEnabled = true,
     patternEnabled = true,
@@ -726,6 +729,7 @@ local function ApplyLevelBadge(row, data)
     {
         shown = GetSetting("showLevel") ~= false,
         styled = GetSetting("showLevelStyle") ~= false,
+        fontSize = Clamp(GetSetting("levelTextSize"), 10, 17),
         playOnTierUpgrade = row.sameIdentity == true,
         previousTier = row.levelTier,
     })
@@ -742,6 +746,8 @@ local function AnchorIdentity(row, data, width, identityHeight)
     local leftOffset = 0
     local centerY = identityHeight * 0.5
     local iconCenterY = centerY - 2
+    local roleIconSize = Clamp(GetSetting("roleIconSize"), 10, 28)
+    local classIconSize = Clamp(GetSetting("classIconSize"), 10, 28)
     local levelCenterY = centerY + 1
     local function AnchorLeft(control, visible, controlWidth, verticalPosition)
         control:SetHidden(not visible)
@@ -756,12 +762,14 @@ local function AnchorIdentity(row, data, width, identityHeight)
     if roleVisible and ZO_GetRoleIcon then
         row.roleIcon:SetTexture(ZO_GetRoleIcon(data.role))
     end
-    AnchorLeft(row.roleIcon, roleVisible, STATUS_ICON_SIZE, iconCenterY)
+    row.roleIcon:SetDimensions(roleIconSize, roleIconSize)
+    AnchorLeft(row.roleIcon, roleVisible, roleIconSize, iconCenterY)
     local classVisible = GetSetting("showClassIcon") ~= false and data.classIcon ~= nil
     if classVisible then
         row.classIcon:SetTexture(data.classIcon)
     end
-    AnchorLeft(row.classIcon, classVisible, STATUS_ICON_SIZE, iconCenterY)
+    row.classIcon:SetDimensions(classIconSize, classIconSize)
+    AnchorLeft(row.classIcon, classVisible, classIconSize, iconCenterY)
 
     local levelWidth = ApplyLevelBadge(row, data)
     AnchorLeft(row.levelControl, levelWidth > 0, levelWidth, levelCenterY)

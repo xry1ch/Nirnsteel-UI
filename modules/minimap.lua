@@ -250,7 +250,7 @@ function Minimap:NormalizeSettings()
     local s = Settings()
     local ranges = {
         diameter = {180, 500, 280}, width = {220, 600, 340}, height = {160, 500, 240}, questTrackerOffset = {0, 600, 0},
-        mapOpacity = {0, 100, 95}, frameOpacity = {0, 100, 100}, borderThickness = {1, 6, 2},
+        mapOpacity = {0, 100, 95}, frameOpacity = {0, 100, 100}, borderThickness = {1, 6, 2}, zoneTextSize = {10, 32, 14},
         zoom = {1, 12, 2.5}, markerScale = {75, 200, 100}, playerScale = {75, 175, 110}, combatOpacity = {0, 100, 40},
     }
     for key, range in pairs(ranges) do s[key] = Clamp(s[key], range[1], range[2], range[3]) end
@@ -349,6 +349,7 @@ function Minimap:Layout()
         f.inner:SetBorderColor(0.13, 0.19, 0.22, 1)
     end
     Place(self.title, self.viewport, w + 16, 24, 0, -h / 2 - 22)
+    self.title:SetFont("$(BOLD_FONT)|" .. s.zoneTextSize .. "|soft-shadow-thick")
     Place(self.coordinates, self.viewport, w, 20, 0, h / 2 + 20)
     Place(self.status, self.viewport, w - 30, 40)
     Place(self.toolbar, self.viewport, 88, 24, 0, h / 2 + 20)
