@@ -10,7 +10,7 @@ local PI, TAU = math.pi, math.pi * 2
 local UPDATE_MS, MAP_CHECK_MS = 33, 1000
 local INSET, HEADER, FOOTER = 14, 30, 28
 local ICONS = {
-    player = "EsoUI/Art/MapPins/UI-WorldMapPlayerPip_white.dds",
+    player = "EsoUI/Art/MapPins/UI-WorldMapPlayerPip.dds",
     group = "EsoUI/Art/MapPins/UI-WorldMapGroupPip.dds",
     leader = "EsoUI/Art/Compass/groupLeader.dds",
     waypoint = "EsoUI/Art/MapPins/UI_Worldmap_pin_customDestination_white.dds",
@@ -19,6 +19,7 @@ local ICONS = {
 }
 local RECT = { {0, 0}, {1, 0}, {1, 1}, {0, 1} }
 local ARROW = { {0.5, 0}, {1, 1}, {0, 1} }
+local WAYPOINT_ARROW = { {0.5, 0}, {1, 1}, {0.5, 0.73}, {0, 1} }
 local CIRCLE = {}
 for i = 0, 95 do
     local a = i * TAU / 96
@@ -36,6 +37,14 @@ local function ValidPoint(x, y)
     return Finite(x) and Finite(y) and x >= 0 and x <= 1 and y >= 0 and y <= 1
 end
 local function Color(c, a) return c.r, c.g, c.b, a or 1 end
+local function WaypointColor()
+    -- Use the world map's blue, including the user's accessibility override.
+    local layout = ZO_MapPin and ZO_MapPin.PIN_DATA and ZO_MapPin.PIN_DATA[MAP_PIN_TYPE_PLAYER_WAYPOINT]
+    local tint = layout and layout.tint
+    if type(tint) == "function" then tint = tint() end
+    if tint and tint.UnpackRGBA then return tint:UnpackRGBA() end
+    return 0.38, 0.78, 0.90, 1
+end
 local function CleanName(name) return zo_strformat("<<1>>", name or "") end
 
 -- Screen-space angles are clockwise; ESO camera/texture headings are counterclockwise.
@@ -188,8 +197,13 @@ function Minimap:CreateView()
     self.status = Label(self.viewport, "Map unavailable", 14, 45)
     self.player = Control(self.pins, CT_TEXTURE, 25)
     self.player:SetTexture(ICONS.player)
-    self.player:SetColor(0.96, 0.98, 1, 1)
-    self.waypointArrow = Polygon(self.pins, ARROW, 23)
+    self.player:SetColor(1, 1, 1, 1)
+    self.waypointArrow = Polygon(self.pins, WAYPOINT_ARROW, 23)
+    self.waypointArrow:SetCenterColor(0.64, 0.72, 0.77, 1)
+    self.waypointArrow:SetBorderColor(0.025, 0.035, 0.047, 1)
+    self.waypointArrow:SetBorderThickness(1.5, 0, 1)
+    self.waypointInset = Polygon(self.waypointArrow, WAYPOINT_ARROW, 24)
+    self.waypointInset:SetCenterColor(WaypointColor())
     self.waypointArrow:SetHidden(true)
     self.toolbar = Control(root, CT_CONTROL, 50)
     self.buttons = {}
@@ -355,9 +369,9 @@ function Minimap:Layout()
     Place(self.toolbar, self.viewport, 88, 24, 0, h / 2 + 20)
     self.title:SetHidden(not s.showLocation and not self.preview and not s.unlocked)
     self.coordinates:SetHidden(not s.showCoordinates)
-    Place(self.player, self.viewport, 22 * s.playerScale / 100, 22 * s.playerScale / 100)
+    Place(self.player, self.viewport, 16 * s.playerScale / 100, 16 * s.playerScale / 100)
     self.north:SetCenterColor(Color(s.accentColor))
-    self.waypointArrow:SetCenterColor(Color(s.accentColor))
+    self.waypointInset:SetCenterColor(WaypointColor())
     self:RefreshClip()
 end
 
@@ -383,6 +397,7 @@ function Minimap:RefreshClip()
     for _, pin in ipairs(self.pinPool) do self:ClipControl(pin.icon); self:ClipControl(pin.area) end
     self:ClipControl(self.player)
     self:ClipControl(self.waypointArrow)
+    self:ClipControl(self.waypointInset)
 end
 
 function Minimap:LayoutCompass()
@@ -684,7 +699,7 @@ function Minimap:DrawPin(data, index)
         pin.icon:SetTexture(data.icon)
         if data.color then pin.icon:SetColor(unpack(data.color))
         elseif data.kind == "objective" or data.kind == "quest" then pin.icon:SetColor(1, 1, 1, 1)
-        elseif data.kind == "waypoint" then pin.icon:SetColor(Color(Settings().accentColor))
+        elseif data.kind == "waypoint" then pin.icon:SetColor(WaypointColor())
         elseif data.kind == "group" then pin.icon:SetColor(0.54, 0.83, 0.95, 1)
         else pin.icon:SetColor(0.94, 0.96, 0.95, 1) end
         pin.icon:SetDrawLevel(data.kind == "objective" and (data.aura and 23 or 24) or data.kind == "waypoint" and 23 or data.kind == "group" and 22 or data.kind == "quest" and 21 or 20)
@@ -692,8 +707,11 @@ function Minimap:DrawPin(data, index)
         pin.visible = true
     elseif data.kind == "waypoint" and Settings().waypointEdge then
         x, y = self:EdgePoint(x, y, size / 2 + 3)
-        PlaceRotatedPolygon(self.waypointArrow, self.viewport, ARROW, size * 0.7, size * 0.85,
+        PlaceRotatedPolygon(self.waypointArrow, self.viewport, WAYPOINT_ARROW, size * 0.8, size,
             x, y, math.atan2(y, x) + PI / 2)
+        PlaceRotatedPolygon(self.waypointInset, self.viewport, WAYPOINT_ARROW, size * 0.46, size * 0.66,
+            x, y, math.atan2(y, x) + PI / 2)
+        self.waypointInset:SetCenterColor(WaypointColor())
         self.waypointArrow:SetHidden(false)
         pin.x, pin.y, pin.visible, pin.edge = x, y, true, true
     end
@@ -807,7 +825,7 @@ function Minimap:Render(elapsed)
         tile:SetTextureRotation(-self.angle, 0.5, 0.5)
     end
     local playerX, playerY = self:Project(x, y)
-    Place(self.player, self.viewport, 22 * Settings().playerScale / 100, 22 * Settings().playerScale / 100, playerX, playerY)
+    Place(self.player, self.viewport, 16 * Settings().playerScale / 100, 16 * Settings().playerScale / 100, playerX, playerY)
     self.player:SetTextureRotation(heading - self.angle, 0.5, 0.5)
     self:DrawPins()
     self:LayoutCompass()

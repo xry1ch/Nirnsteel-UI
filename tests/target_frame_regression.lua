@@ -280,6 +280,9 @@ GetClassIcon = nil
 
 assert(loadfile("modules/target_frame.lua"))()
 local TargetFrame = Nirnsteel_UI.TargetFrame
+local originalApplyLayout = TargetFrame.ApplyLayout
+local originalApplyStyle = TargetFrame.ApplyStyle
+local originalUpdateExecute = TargetFrame.UpdateExecute
 
 TargetFrame.identity = NewControl(24)
 TargetFrame.identityContent = NewControl(24)
@@ -905,5 +908,132 @@ expect(TargetFrame.currentData ~= nil, "a successful recovery must reacquire the
 expect(stockVisibilityCalls[#stockVisibilityCalls] == true,
     "the stock frame may be hidden again only after custom-frame recovery succeeds")
 UNIT_FRAMES = nil
+
+-- Boss status follows actual unit identity, including metadata arriving after
+-- acquisition without a health change. Difficulty and names are not evidence.
+MAX_BOSSES = 6
+local bossExists = false
+local bossMatches = true
+local player = false
+DoesUnitExist = function(tag)
+    return tag == "reticleover" or (tag == "boss3" and bossExists)
+end
+AreUnitsEqual = function(first, second)
+    return first == "reticleover" and second == "boss3" and bossMatches
+end
+IsUnitPlayer = function() return player end
+GetUnitName = function() return "The Walking Nightmare" end
+TargetFrame:RefreshTarget(true)
+expect(TargetFrame.currentData.isBoss == false, "an unrecognized NPC must not be decorated")
+bossExists = true
+TargetFrame:ReconcileTarget()
+expect(TargetFrame.currentData.isBoss == true, "late boss identity must update the target fingerprint")
+bossMatches = false
+TargetFrame:ReconcileTarget()
+expect(TargetFrame.currentData.isBoss == false, "a same-name nonboss must lose boss status")
+bossMatches = true
+player = true
+TargetFrame:ReconcileTarget()
+expect(TargetFrame.currentData.isBoss == false, "players must never be bosses")
+player = false
+
+-- Exercise real layout and ornament construction with a minimal polygon API.
+RIGHT, BOTTOM, CT_POLYGON, CT_CONTROL, CT_TEXTURE = 6, 7, 8, 9, 10
+POLYGON_POINT_LAYOUT_CLOCKWISE, POLYGON_BORDER_DIRECTION_IN, DL_OVERLAY = 1, 1, 1
+local created = 0
+WINDOW_MANAGER = { CreateControl = function(_, _, parent)
+    created = created + 1
+    local control = NewControl()
+    control.parent = parent
+    for _, method in ipairs({ "SetMouseEnabled", "SetPointLayout", "SetSmoothingEnabled",
+        "SetBorderDirection", "SetBorderThickness", "SetDrawLayer", "SetDrawLevel" }) do
+        control[method] = noop
+    end
+    control.SetAnchorFill = function(self, target) self.fillTarget = target end
+    control.AddPoint = function(self, x, y)
+        self.points = self.points or {}
+        self.points[#self.points + 1] = {x, y}
+    end
+    control.SetCenterColor = function(self, ...) self.centerColor = {...} end
+    control.SetBorderColor = function(self, ...) self.borderColor = {...} end
+    return control
+end }
+BarVisuals.ApplyStyle = function(_, _, options) BarVisuals.lastStyle = options end
+TargetFrame.nameLabel.SetFont = noop
+TargetFrame.ApplyLayout = originalApplyLayout
+TargetFrame.ApplyStyle = originalApplyStyle
+TargetFrame:RefreshTarget(true)
+local ornaments = TargetFrame.bossDecoration
+expect(ornaments and not ornaments.hidden, "recognized bosses must create visible ornaments")
+expect(ornaments.skull.texture == "/esoui/art/compass/target_white_skull.dds",
+    "the permanent boss crest must use the white skull")
+expect(ornaments.crest.width == 64 and ornaments.skull.width == 16 and ornaments.crest.anchor[5] == 0,
+    "the crest must have fixed dimensions and clearance")
+local ornamentControlCount = created
+for _, width in ipairs({180, 700}) do
+    for _, height in ipairs({10, 48}) do
+        for _, scale in ipairs({70, 160}) do
+            for _, border in ipairs({0, 8}) do
+                for _, position in ipairs({"left", "center", "right"}) do
+                    settings.width, settings.barHeight, settings.scale = width, height, scale
+                    settings.borderWidth, settings.executePosition = border, position
+                    settings.opacity = 35
+                    settings.barPatternEnabled = border == 0
+                    settings.staticColor = {r = 0.2, g = 0.8, b = 0.5}
+                    TargetFrame:RefreshTarget(true)
+                    local bracketWidth = height == 10 and 6 or 10
+                    expect(root.width == width + 2 * bracketWidth and mover.width == root.width,
+                        "root and mover must contain the brackets")
+                    expect(root.height == 24 + 4 + height + 20 and mover.height == root.height,
+                        "root and mover must contain the bottom crest")
+                    expect(TargetFrame.health.anchor[4] == bracketWidth and root.scale == scale / 100,
+                        "padding must preserve bar center and inherit scale")
+                    expect(ornaments.left.width == bracketWidth and ornaments.left.height == height
+                        and ornaments.left.anchor[4] == 0 and ornaments.right.anchor[4] == 0,
+                        "solid end caps must meet the bar edges")
+                    expect(ornaments.alpha == 0.35, "ornaments must inherit bar opacity")
+                    expect(BarVisuals.lastStyle.width == width and BarVisuals.lastStyle.height == height
+                        and BarVisuals.lastStyle.borderWidth == border
+                        and BarVisuals.lastStyle.fillStartColor.g == 0.8
+                        and BarVisuals.lastStyle.patternEnabled == settings.barPatternEnabled,
+                        "boss appearance must preserve bar customization")
+                end
+            end
+        end
+    end
+end
+expect(created == ornamentControlCount, "refreshes must reuse ornament controls")
+TargetFrame.UpdateExecute = originalUpdateExecute
+TargetFrame.health.leftLabel = NewControl()
+TargetFrame.health.rightLabel = NewControl()
+TargetFrame.health.centerLabel = NewControl()
+TargetFrame.health.centerLabel:SetHidden(true)
+settings.barHeight, settings.executeIconScale = 10, 200
+GetUnitPower = function() return 1000, 40000 end
+for _, position in ipairs({"left", "center", "right"}) do
+    settings.executePosition = position
+    TargetFrame:RefreshTarget(true)
+    expect(not TargetFrame.executeIcon.hidden and TargetFrame.executeIcon.width == 36,
+        "large execute indicators must remain visible on decorated bosses")
+    expect(ornaments.crest.anchor[5] == 15 and root.height == 24 + 4 + 10 + 20 + 15,
+        "a thin bar must reserve clearance below an oversized execute icon")
+end
+settings.bossDecoration = false
+TargetFrame:RefreshTarget(true)
+expect(ornaments.hidden and root.width == settings.width, "disabling must remove decorations and padding")
+settings.bossDecoration = true
+TargetFrame:SetSettingsPreviewActive(true)
+TargetFrame:SetBossPreview(true)
+expect(TargetFrame.currentData.isBoss and not ornaments.hidden, "boss preview must use the boss appearance")
+TargetFrame:SetBossPreview(false)
+expect(TargetFrame.currentData.isPlayer and ornaments.hidden, "disabling preview must restore the standard sample")
+TargetFrame:SetBossPreview(true)
+TargetFrame:SetSettingsPreviewActive(false)
+expect(TargetFrame.previewBoss == nil, "closing settings must discard preview selection")
+bossMatches = false
+TargetFrame:RefreshTarget(true)
+expect(ornaments.hidden, "normal targets must hide the ornaments")
+TargetFrame:ApplyTargetData(nil, true)
+expect(ornaments.hidden and root.hidden, "missing targets must clear decorations")
 
 print("target_frame_regression.lua: all checks passed")

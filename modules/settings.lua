@@ -298,6 +298,7 @@ local GROUP_FRAMES_DEFAULTS =
 
 local TARGET_FRAME_DEFAULTS =
 {
+    bossDecoration = true,
     enabled = true,
     unlocked = false,
     scale = 100,
@@ -2829,6 +2830,21 @@ function Settings:BuildTargetFrameOptions()
         type = "button",
         name = "Replay Preview Effects",
         func = function() self:ReplayTargetFramePreviewEffects() end,
+        disabled = Disabled,
+        width = "half",
+    })
+
+    Header("Boss Appearance")
+    Checkbox("Boss decoration", "bossDecoration", "Add silver steel end caps and a winged skull crest to recognized boss targets.")
+    Add(
+    {
+        type = "checkbox",
+        name = "Preview boss",
+        tooltip = "Show a boss while this settings section is open. This preview is not saved.",
+        getFunc = function() return Nirnsteel_UI.TargetFrame and Nirnsteel_UI.TargetFrame.previewBoss == true end,
+        setFunc = function(value)
+            if Nirnsteel_UI.TargetFrame then Nirnsteel_UI.TargetFrame:SetBossPreview(value) end
+        end,
         disabled = Disabled,
         width = "half",
     })
