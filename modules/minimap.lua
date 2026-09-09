@@ -379,6 +379,7 @@ function Minimap:RefreshClip()
     self:ClipControl(self.terrain)
     self:ClipControl(self.pins)
     for _, c in ipairs(self.tilePool) do self:ClipControl(c) end
+    for _, c in ipairs(self.digSitePool or {}) do self:ClipControl(c) end
     for _, pin in ipairs(self.pinPool) do self:ClipControl(pin.icon); self:ClipControl(pin.area) end
     self:ClipControl(self.player)
     self:ClipControl(self.waypointArrow)
@@ -416,6 +417,7 @@ function Minimap:InvalidateMap()
     self.mapReady, self.mapKey, self.angle = false, nil, nil
     self.available = false
     self.staticPins = {}
+    self.digSites = {}
     self.staticDirty, self.nextMapCheck = true, 0
     if self.root then
         self.terrain:SetHidden(true)
@@ -479,7 +481,83 @@ function Minimap:RefreshMap()
         self.mapKey, self.mapReady, self.staticDirty = key, true, true
         self.mapName = CleanName(GetMapName())
     end
+    self:RefreshDigSites()
     return true
+end
+
+-- Read the same map-space borders as the native world map, without borrowing
+-- its controls or requiring the world map to have been opened first.
+function Minimap:RefreshDigSites()
+    self.digSites = {}
+    if not GetNumInProgressAntiquities then return end
+    local seen = {}
+    for antiquity = 1, GetNumInProgressAntiquities() do
+        for site = 1, GetNumDigSitesForInProgressAntiquity(antiquity) do
+            local id = GetInProgressAntiquityDigSiteId(antiquity, site)
+            if not seen[id] then
+                seen[id] = true
+                local _, _, shown = GetDigSiteNormalizedCenterPosition(id)
+                if shown then
+                    local coordinates = { GetDigSiteNormalizedBorderPoints(id) }
+                    local points, minX, minY, maxX, maxY = {}, 1, 1, 0, 0
+                    local valid = #coordinates >= 6 and #coordinates % 2 == 0
+                    for i = 1, #coordinates, 2 do
+                        local x, y = coordinates[i], coordinates[i + 1]
+                        if not ValidPoint(x, y) then valid = false; break end
+                        points[#points + 1] = {x, y}
+                        minX, minY = math.min(minX, x), math.min(minY, y)
+                        maxX, maxY = math.max(maxX, x), math.max(maxY, y)
+                    end
+                    if valid and maxX > minX and maxY > minY then
+                        for _, p in ipairs(points) do
+                            p[1], p[2] = (p[1] - minX) / (maxX - minX), (p[2] - minY) / (maxY - minY)
+                        end
+                        self.digSites[#self.digSites + 1] = {
+                            points = points, x = (minX + maxX) / 2, y = (minY + maxY) / 2,
+                            width = maxX - minX, height = maxY - minY,
+                            tracked = IsDigSiteAssociatedWithTrackedAntiquity(id),
+                        }
+                    end
+                end
+            end
+        end
+    end
+end
+
+function Minimap:DrawDigSites()
+    self.digSitePool = self.digSitePool or {}
+    local count = 0
+    if not self.preview then
+        for i, site in ipairs(self.digSites or {}) do
+            local polygon = self.digSitePool[i]
+            if not polygon then
+                polygon = Polygon(self.pins, {}, 9)
+                polygon:SetBorderThickness(1.25, 1.25, 1)
+                self.digSitePool[i] = polygon
+            end
+            if polygon.digSitePointCount ~= #site.points then
+                polygon:ClearPoints()
+                for _, p in ipairs(site.points) do polygon:AddPoint(p[1], p[2]) end
+                polygon.digSitePointCount = #site.points
+            end
+            local x, y = self:Project(site.x, site.y)
+            PlaceRotatedPolygon(polygon, self.viewport, site.points,
+                site.width * self.span, site.height * self.span, x, y, self.angle)
+            local fill = site.tracked and ZO_MAP_PIN_TRACKED_DIG_SITE_COLOR or ZO_MAP_PIN_DIG_SITE_COLOR
+            -- Native color constants can be opaque; keep terrain readable on
+            -- our standalone polygon without fading its outline along with it.
+            local r, g, b = 0.3, 0.8, 0.9
+            if fill then r, g, b = fill:UnpackRGBA() end
+            polygon:SetCenterColor(r, g, b, site.tracked and 0.14 or 0.09)
+            r, g, b = 0.2, 0.9, 1
+            if ZO_MAP_PIN_DIG_SITE_BORDER_COLOR then r, g, b = ZO_MAP_PIN_DIG_SITE_BORDER_COLOR:UnpackRGBA() end
+            polygon:SetBorderColor(r, g, b, 0.85)
+            self:ClipControl(polygon)
+            polygon:SetHidden(false)
+            count = i
+        end
+    end
+    for i = count + 1, #self.digSitePool do self.digSitePool[i]:SetHidden(true) end
 end
 
 local function AddPin(list, kind, x, y, icon, name, radius, areaColor)
@@ -663,6 +741,7 @@ function Minimap:DrawBattlegroundPins(index)
 end
 
 function Minimap:DrawPins()
+    self:DrawDigSites()
     local index = 1
     self.waypointArrow:SetHidden(true)
     for _, data in ipairs(self.staticPins) do index = self:DrawPin(data, index) end

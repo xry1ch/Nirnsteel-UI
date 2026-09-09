@@ -84,6 +84,7 @@ local function NewControl(parent, kind)
     function c:SetPointLayout(v) self.pointLayout = v end
     function c:SetSmoothingEnabled(v) self.smoothing = v end
     function c:AddPoint(x, y) self.points[#self.points + 1] = {x, y} end
+    function c:ClearPoints() self.points = {} end
     function c:SetPoint(i, x, y)
         assert(self.points[i], "SetPoint requires an existing polygon vertex")
         self.points[i][1], self.points[i][2] = x, y
